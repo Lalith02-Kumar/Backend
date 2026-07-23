@@ -255,11 +255,7 @@ Respond with ONLY valid JSON in this exact structure:
       return parsed;
     } catch (error) {
       logger.error('AI parsing failed', error);
-      if (process.env.NODE_ENV === 'production') {
-        throw new Error(`AI parsing failed: ${(error as Error).message}`);
-      }
-      // Return minimal parsed data
-      return this.fallbackParse(rawText);
+      throw new Error(`AI parsing failed: ${(error as Error).message}`);
     }
   }
 
