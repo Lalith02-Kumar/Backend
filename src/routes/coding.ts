@@ -6,6 +6,7 @@ import { codingFetcherQueue } from '../queues';
 import { AppError } from '../core/AppError';
 import { asyncHandler } from '../core/asyncHandler';
 import { CodingAnalyzerService } from '../services/ai/codingAnalyzer.service';
+import { logger } from '../lib/logger';
 import type { ApiResponse } from '../types';
 
 const router = Router();
@@ -30,14 +31,19 @@ router.post('/connect', authenticate, asyncHandler(async (req: AuthRequest, res:
   try {
     const axios = require('axios');
     if (platform === 'LEETCODE') {
-      const res = await axios.get(`https://leetcode-api-faisalshohag.vercel.app/${username}`);
+      const res = await axios.get(`https://leetcode-api-faisalshohag.vercel.app/${username}`, { timeout: 5000 });
       if (res.data.errors) throw new Error();
     } else if (platform === 'CODEFORCES') {
-      await axios.get(`https://codeforces.com/api/user.info?handles=${username}`);
+      await axios.get(`https://codeforces.com/api/user.info?handles=${username}`, { timeout: 5000 });
     }
-  } catch (error) {
-    throw new AppError(`Username not found on ${platform}`, 400, 'INVALID_USERNAME');
+  } catch (error: any) {
+    const status = error.response?.status;
+    if (status === 400 || status === 404) {
+      throw new AppError(`Username not found on ${platform}`, 400, 'INVALID_USERNAME');
+    }
+    logger.warn(`Verification connection check failed for platform ${platform}, username ${username}: ${error.message}`);
   }
+
 
   const profile = await prisma.codingProfile.upsert({
     where: { userId_platform: { userId: req.user!.id, platform } },

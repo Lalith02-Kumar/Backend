@@ -17,6 +17,7 @@ const envSchema = z.object({
   FIREBASE_CLIENT_EMAIL: z.string().optional(),
   FIREBASE_PRIVATE_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
+  GEMINI_API_KEYS: z.string().optional(),
   GITHUB_TOKEN: z.string().optional(),
   JWT_SECRET: z.string().optional(),
 });
