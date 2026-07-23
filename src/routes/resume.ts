@@ -136,4 +136,61 @@ router.get('/status/:jobId', authenticate, asyncHandler(async (req: AuthRequest,
   } as ApiResponse);
 }));
 
+// POST /api/resume/chat
+router.post('/chat', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { message } = req.body;
+  if (!message) {
+    throw new AppError('Message is required', 400, 'BAD_REQUEST');
+  }
+
+  // Get user's parsed resume
+  const resume = await prisma.resume.findUnique({
+    where: { userId: req.user!.id }
+  });
+
+  if (!resume || !resume.parsedData) {
+    throw new AppError('Upload and process your resume first before chatting', 400, 'RESUME_NOT_FOUND');
+  }
+
+  const parsed = resume.parsedData as any;
+  const skills = parsed.skills ? parsed.skills.map((s: any) => typeof s === 'string' ? s : s.name).join(', ') : '';
+  const education = parsed.education ? JSON.stringify(parsed.education) : '';
+  const experience = parsed.experience ? JSON.stringify(parsed.experience) : '';
+  const projects = parsed.projects ? JSON.stringify(parsed.projects) : '';
+  const analysis = parsed.analysis ? JSON.stringify(parsed.analysis) : '';
+
+  const prompt = `You are a helpful and experienced tech career coach. You have access to the user's resume analysis in PlacementIQ.
+
+USER'S RESUME DATA:
+- Skills: ${skills}
+- Education: ${education}
+- Experience: ${experience}
+- Projects: ${projects}
+- AI Evaluation Summary: ${analysis}
+
+USER'S MESSAGE:
+${message}
+
+INSTRUCTIONS:
+1. Provide highly actionable, concise, and constructive career advice.
+2. If they ask about score improvements, point out critical missing skills, recommended certifications, or project enhancements from the evaluation.
+3. Be professional and encouraging. Keep your response under 3-4 short paragraphs.
+`;
+
+  try {
+    const { GoogleGenerativeAI } = require('@google/generative-ai');
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const result = await model.generateContent(prompt);
+    const reply = result.response.text();
+
+    res.json({
+      success: true,
+      data: { reply }
+    } as ApiResponse);
+  } catch (error: any) {
+    throw new AppError('AI response generation failed', 500, 'AI_ERROR', error.message);
+  }
+}));
+
 export { router as resumeRouter };

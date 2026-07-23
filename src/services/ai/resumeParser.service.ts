@@ -129,7 +129,117 @@ Respond with ONLY valid JSON in this exact structure:
     "projectImprovements": ["strings (how to improve project section)"],
     "experienceImprovements": ["strings (how to improve experience section)"],
     "educationImprovements": ["strings (how to improve education section)"],
-    "actionableRecommendations": ["strings (top 3-5 immediate steps to take)"]
+    "actionableRecommendations": ["strings (top 3-5 immediate steps to take)"],
+    "summary": {
+      "experienceLevel": "Entry-level|Mid-level|Senior",
+      "aiConfidence": 95
+    },
+    "atsScoreDashboard": {
+      "overallAtsScore": 80,
+      "formatting": 85,
+      "keywords": 70,
+      "skills": 85,
+      "experience": 75,
+      "education": 80,
+      "readability": 90,
+      "atsCompatibility": 85
+    },
+    "resumeQualityAnalysis": {
+      "grammarScore": 90,
+      "contentScore": 80,
+      "formatting": 85,
+      "actionVerbs": 75,
+      "professionalTone": 95,
+      "readability": 90,
+      "resumeCompleteness": 85
+    },
+    "grammarAnalysis": [
+      {
+        "original": "original sentence with issue",
+        "improved": "corrected version",
+        "reason": "why it was improved"
+      }
+    ],
+    "keywordAnalysis": {
+      "found": ["react", "nodejs"],
+      "missing": ["docker", "redis"],
+      "repeated": ["developer", "project"],
+      "density": {
+        "react": 4.5,
+        "javascript": 3.2
+      }
+    },
+    "roleMatching": [
+      { "role": "Software Engineer", "percentage": 92 },
+      { "role": "Backend Developer", "percentage": 90 },
+      { "role": "Full Stack Developer", "percentage": 89 },
+      { "role": "Cloud Engineer", "percentage": 82 },
+      { "role": "AI Engineer", "percentage": 74 }
+    ],
+    "missingSkillsList": [
+      {
+        "skill": "Docker",
+        "importance": "HIGH",
+        "resumeImpact": "Highly requested for containerized deployments",
+        "learningResource": "https://docker-curriculum.com"
+      }
+    ],
+    "educationAnalysis": {
+      "educationScore": 85,
+      "industryRelevance": "High relevance for software engineering roles",
+      "suggestions": ["Include specific relevant coursework like OS or DBMS"]
+    },
+    "certificationAnalysis": {
+      "existing": ["AWS Cloud Practitioner"],
+      "recommended": [
+        {
+          "name": "AWS Certified Developer Associate",
+          "difficulty": "MEDIUM",
+          "duration": "4 weeks",
+          "industryDemand": "HIGH"
+        }
+      ]
+    },
+    "experienceAnalysis": {
+      "experienceScore": 75,
+      "internshipReadiness": 85,
+      "industryReadiness": 70,
+      "volunteerSuggestions": ["Contribute to open-source developer tools on GitHub"],
+      "hackathonSuggestions": ["Participate in local Web3 or AI hackathons to build fast-paced projects"]
+    },
+    "projectsAnalysis": [
+      {
+        "projectName": "e-commerce web app",
+        "projectScore": 85,
+        "complexity": "MEDIUM",
+        "recruiterInterest": "HIGH",
+        "aiImprovedDescription": "Developed a high-concurrency e-commerce portal utilizing React and Express, improving page load speed by 35% through Redis caching.",
+        "missingTechnologies": ["Redis", "Docker"]
+      }
+    ],
+    "recommendedProjects": [
+      {
+        "title": "Real-time Chat Application",
+        "difficulty": "INTERMEDIATE",
+        "technologies": ["WebSockets", "Node.js", "Redis"],
+        "resumeBoost": "Demonstrates real-time bi-directional networking and pub-sub architectures",
+        "githubReady": true
+      }
+    ],
+    "careerInsights": {
+      "interviewProbability": 75,
+      "resumeShortlistingRate": 80,
+      "salaryEstimate": "$70,000 - $95,000",
+      "hiringReadiness": "Strong candidate, needs cloud foundation",
+      "topIndustries": ["Fintech", "SaaS", "E-commerce"]
+    },
+    "roadmap": [
+      {
+        "priority": "CRITICAL",
+        "actionItem": "Add Docker containerization to your main e-commerce project",
+        "estimatedScoreIncrease": 8
+      }
+    ]
   },
   "rawText": ""
 }`;
@@ -187,6 +297,116 @@ Respond with ONLY valid JSON in this exact structure:
         confidence: 0.6,
       }));
 
+    const analysisData = {
+      resumeScore: 60,
+      atsScore: 55,
+      placementReadinessScore: 50,
+      missingSkills: ['docker', 'kubernetes', 'aws'],
+      matchingSkills: foundSkills.map(s => s.name.toLowerCase()),
+      strengths: ['Has foundation skills'],
+      weaknesses: ['Missing deployment experience', 'No projects structured in detail'],
+      grammarIssues: [],
+      formattingIssues: [],
+      lineByLineSuggestions: ['Add projects featuring backend microservices'],
+      projectImprovements: [],
+      experienceImprovements: [],
+      educationImprovements: [],
+      actionableRecommendations: ['Build a real-time messaging application using WebSockets'],
+      summary: {
+        experienceLevel: 'Entry-level',
+        aiConfidence: 75,
+      },
+      atsScoreDashboard: {
+        overallAtsScore: 55,
+        formatting: 65,
+        keywords: 50,
+        skills: 60,
+        experience: 45,
+        education: 70,
+        readability: 80,
+        atsCompatibility: 65,
+      },
+      resumeQualityAnalysis: {
+        grammarScore: 85,
+        contentScore: 55,
+        formatting: 70,
+        actionVerbs: 50,
+        professionalTone: 80,
+        readability: 80,
+        resumeCompleteness: 60,
+      },
+      grammarAnalysis: [],
+      keywordAnalysis: {
+        found: foundSkills.map(s => s.name.toLowerCase()),
+        missing: ['docker', 'kubernetes', 'aws', 'ci/cd'],
+        repeated: ['developer'],
+        density: {
+          javascript: 2.5,
+          git: 1.8,
+        },
+      },
+      roleMatching: [
+        { role: 'Software Engineer', percentage: 65 },
+        { role: 'Backend Developer', percentage: 60 },
+        { role: 'Full Stack Developer', percentage: 58 },
+      ],
+      missingSkillsList: [
+        {
+          skill: 'Docker',
+          importance: 'HIGH' as const,
+          resumeImpact: 'Containerization skills increase resume shortlisting by 20%',
+          learningResource: 'https://docker-curriculum.com',
+        },
+      ],
+      educationAnalysis: {
+        educationScore: 70,
+        industryRelevance: 'Medium',
+        suggestions: ['List key courses and relevant technical electives'],
+      },
+      certificationAnalysis: {
+        existing: [],
+        recommended: [
+          {
+            name: 'AWS Certified Cloud Practitioner',
+            difficulty: 'EASY' as const,
+            duration: '2 weeks',
+            industryDemand: 'HIGH' as const,
+          },
+        ],
+      },
+      experienceAnalysis: {
+        experienceScore: 40,
+        internshipReadiness: 60,
+        industryReadiness: 45,
+        volunteerSuggestions: ['Join open-source projects on GitHub to build public contributions'],
+        hackathonSuggestions: ['Register for Devpost hackathons to gain collaborative coding practice'],
+      },
+      projectsAnalysis: [],
+      recommendedProjects: [
+        {
+          title: 'Distributed Chat System',
+          difficulty: 'INTERMEDIATE' as const,
+          technologies: ['WebSockets', 'Redis', 'Node.js'],
+          resumeBoost: 'Showcases networking protocols and scalable system components',
+          githubReady: true,
+        },
+      ],
+      careerInsights: {
+        interviewProbability: 40,
+        resumeShortlistingRate: 35,
+        salaryEstimate: '$50,000 - $65,000',
+        hiringReadiness: 'Needs backend deployment experience',
+        topIndustries: ['Consulting', 'Information Technology'],
+      },
+      roadmap: [
+        {
+          priority: 'CRITICAL' as const,
+          actionItem: 'Add cloud database integration using PostgreSQL',
+          estimatedScoreIncrease: 10,
+        },
+      ],
+    };
+
     return {
       contactInfo: { name: 'Unknown' },
       education: [],
@@ -194,6 +414,7 @@ Respond with ONLY valid JSON in this exact structure:
       projects: [],
       skills: foundSkills,
       certifications: [],
+      analysis: analysisData,
       rawText,
     };
   }

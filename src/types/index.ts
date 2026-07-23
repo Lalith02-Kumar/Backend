@@ -107,6 +107,100 @@ export interface CompleteResumeAnalysis {
   experienceImprovements: string[];
   educationImprovements: string[];
   actionableRecommendations: string[];
+  
+  // Rich analytics fields
+  summary?: {
+    experienceLevel: string;
+    aiConfidence: number;
+  };
+  atsScoreDashboard?: {
+    overallAtsScore: number;
+    formatting: number;
+    keywords: number;
+    skills: number;
+    experience: number;
+    education: number;
+    readability: number;
+    atsCompatibility: number;
+  };
+  resumeQualityAnalysis?: {
+    grammarScore: number;
+    contentScore: number;
+    formatting: number;
+    actionVerbs: number;
+    professionalTone: number;
+    readability: number;
+    resumeCompleteness: number;
+  };
+  grammarAnalysis?: Array<{
+    original: string;
+    improved: string;
+    reason: string;
+  }>;
+  keywordAnalysis?: {
+    found: string[];
+    missing: string[];
+    repeated: string[];
+    density: Record<string, number>;
+  };
+  roleMatching?: Array<{
+    role: string;
+    percentage: number;
+  }>;
+  missingSkillsList?: Array<{
+    skill: string;
+    importance: 'HIGH' | 'MEDIUM' | 'LOW';
+    resumeImpact: string;
+    learningResource: string;
+  }>;
+  educationAnalysis?: {
+    educationScore: number;
+    industryRelevance: string;
+    suggestions: string[];
+  };
+  certificationAnalysis?: {
+    existing: string[];
+    recommended: Array<{
+      name: string;
+      difficulty: 'EASY' | 'MEDIUM' | 'HARD';
+      duration: string;
+      industryDemand: 'HIGH' | 'MEDIUM' | 'LOW';
+    }>;
+  };
+  experienceAnalysis?: {
+    experienceScore: number;
+    internshipReadiness: number;
+    industryReadiness: number;
+    volunteerSuggestions: string[];
+    hackathonSuggestions: string[];
+  };
+  projectsAnalysis?: Array<{
+    projectName: string;
+    projectScore: number;
+    complexity: 'HIGH' | 'MEDIUM' | 'LOW';
+    recruiterInterest: 'HIGH' | 'MEDIUM' | 'LOW';
+    aiImprovedDescription: string;
+    missingTechnologies: string[];
+  }>;
+  recommendedProjects?: Array<{
+    title: string;
+    difficulty: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
+    technologies: string[];
+    resumeBoost: string;
+    githubReady: boolean;
+  }>;
+  careerInsights?: {
+    interviewProbability: number;
+    resumeShortlistingRate: number;
+    salaryEstimate: string;
+    hiringReadiness: string;
+    topIndustries: string[];
+  };
+  roadmap?: Array<{
+    priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+    actionItem: string;
+    estimatedScoreIncrease: number;
+  }>;
 }
 
 export interface ContactInfo {
