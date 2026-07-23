@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { codingFetcherQueue } from '../queues';
 import { AppError } from '../core/AppError';
 import { asyncHandler } from '../core/asyncHandler';
+import { CodingAnalyzerService } from '../services/ai/codingAnalyzer.service';
 import type { ApiResponse } from '../types';
 
 const router = Router();
@@ -78,6 +79,41 @@ router.delete('/:platform', authenticate, asyncHandler(async (req: AuthRequest, 
     where: { userId_platform: { userId: req.user!.id, platform } },
   });
   res.json({ success: true, data: { message: 'Coding profile disconnected' } } as ApiResponse);
+}));
+
+// GET /api/coding/analysis
+router.get('/analysis', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const analysis = await prisma.codingAnalysis.findUnique({
+    where: { userId: req.user!.id },
+  });
+  res.json({ success: true, data: analysis } as ApiResponse);
+}));
+
+// POST /api/coding/analyze
+router.post('/analyze', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const profiles = await prisma.codingProfile.findMany({
+    where: { userId: req.user!.id },
+  });
+
+  if (profiles.length === 0) {
+    throw new AppError('No coding profiles connected to analyze', 400);
+  }
+
+  const analyzer = new CodingAnalyzerService();
+  const insights = await analyzer.analyzeProfiles(profiles as any);
+
+  const analysis = await prisma.codingAnalysis.upsert({
+    where: { userId: req.user!.id },
+    update: {
+      ...insights,
+    },
+    create: {
+      userId: req.user!.id,
+      ...insights,
+    },
+  });
+
+  res.json({ success: true, data: analysis } as ApiResponse);
 }));
 
 export { router as codingRouter };

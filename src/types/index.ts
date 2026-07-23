@@ -358,6 +358,8 @@ export interface JobDescription {
   salaryRange?: string;
   location?: string;
   isRemote: boolean;
+  isHybrid: boolean;
+  jobType: string;
   source: string;
   createdAt: Date;
 }
@@ -382,11 +384,18 @@ export interface JobRecommendation {
   jobId: string;
   rank: number;
   matchScore: number; // 0–100
+  companyMatchScore: number;
+  roleMatchScore: number;
   matchedSkills: string[];
   missingSkills: string[];
   reason: string;
+  nonMatchReason: string;
   estimatedReadiness: JobReadinessLevel;
   improvementTips: string[];
+  interviewProbability: number;
+  experienceRequired: string;
+  requiredCertifications: string[];
+  missingCertifications: string[];
   createdAt: Date;
   /** Populated via include */
   job?: JobDescription;
@@ -397,11 +406,18 @@ export interface JobRecommendationCard {
   id: string;
   rank: number;
   matchScore: number;
+  companyMatchScore: number;
+  roleMatchScore: number;
   estimatedReadiness: JobReadinessLevel;
   reason: string;
+  nonMatchReason: string;
   matchedSkills: string[];
   missingSkills: string[];
   improvementTips: string[];
+  interviewProbability: number;
+  experienceRequired: string;
+  requiredCertifications: string[];
+  missingCertifications: string[];
   job: {
     id: string;
     title: string;
@@ -412,6 +428,8 @@ export interface JobRecommendationCard {
     salaryRange?: string;
     location?: string;
     isRemote: boolean;
+    isHybrid: boolean;
+    jobType: string;
     requiredSkills: JobSkillRequirement[];
   };
 }

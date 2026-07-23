@@ -43,4 +43,18 @@ router.get('/me', authenticate, asyncHandler(async (req: AuthRequest, res: Respo
   res.json(response);
 }));
 
+// POST /api/auth/change-password
+router.post('/change-password', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { auth } = await import('../lib/firebase');
+  const link = await auth.generatePasswordResetLink(req.user!.email);
+  res.json({ success: true, data: { message: 'Password reset link generated', link } } as ApiResponse);
+}));
+
+// POST /api/auth/revoke-sessions
+router.post('/revoke-sessions', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { auth } = await import('../lib/firebase');
+  await auth.revokeRefreshTokens(req.user!.firebaseUid);
+  res.json({ success: true, data: { message: 'All other sessions have been revoked.' } } as ApiResponse);
+}));
+
 export { router as authRouter };

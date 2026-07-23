@@ -101,22 +101,30 @@ enum RecommendationType {
 
 model User {
   id          String   @id @default(cuid())
-  email       String   @unique
-  displayName String
-  photoURL    String?
-  firebaseUid String   @unique
-  role        UserRole @default(STUDENT)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  email              String   @unique
+  displayName        String
+  photoURL           String?
+  firebaseUid        String   @unique
+  role               UserRole @default(STUDENT)
+  isActive           Boolean  @default(true)
+  theme              String   @default("system")
+  emailNotifications Boolean  @default(true)
+  profileVisibility  String   @default("public")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   profile        UserProfile?
   resume         Resume?
   githubProfile  GitHubProfile?
   githubAnalysis GitHubAnalysis?
   codingProfiles CodingProfile[]
+  codingAnalysis CodingAnalysis?
+  savedJobs      UserSavedJob[]
   analyses       PlacementAnalysis[]
   activities     ActivityLog[]
+  skills         UserSkill[]
+  projects       UserProject[]
+  certificates   UserCertificate[]
 
   @@map("users")
 }
@@ -135,6 +143,14 @@ model UserProfile {
   preferredCompanies  String[]
   preferredTechStack  String[]
   bio                 String?
+  phoneNumber         String?
+  dateOfBirth         DateTime?
+  gender              String?
+  location            String?
+  degree              String?
+  university          String?
+  preferredLocation   String?
+  experienceMonths    Int?
   linkedinUrl         String?
   portfolioUrl        String?
   isComplete          Boolean    @default(false)
@@ -145,6 +161,50 @@ model UserProfile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_profiles")
+}
+
+model UserSkill {
+  id               String           @id @default(cuid())
+  userId           String
+  name             String
+  category         SkillCategory
+  proficiencyLevel ProficiencyLevel @default(INTERMEDIATE)
+  createdAt        DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("user_skills")
+}
+
+model UserProject {
+  id           String    @id @default(cuid())
+  userId       String
+  title        String
+  description  String
+  technologies String[]
+  link         String?
+  githubUrl    String?
+  startDate    DateTime?
+  endDate      DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("user_projects")
+}
+
+model UserCertificate {
+  id         String    @id @default(cuid())
+  userId     String
+  title      String
+  issuer     String
+  issueDate  DateTime?
+  url        String?
+  fileUrl    String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("user_certificates")
 }
 
 // ─── Resume ───────────────────────────────────────────────────────────────────
@@ -229,6 +289,24 @@ model CodingProfile {
   @@map("coding_profiles")
 }
 
+model CodingAnalysis {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  codingScore             Int      @default(0)
+  dsaReadiness            String   
+  interviewReadiness      String   
+  weakTopics              String[]
+  strongTopics            String[]
+  suggestedPracticeTopics String[]
+  recommendedProblems     Json     @default("[]")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("coding_analyses")
+}
+
 // ─── Job Descriptions ─────────────────────────────────────────────────────────
 // Curated dataset used by the recommendation engine — not admin-managed
 
@@ -245,6 +323,8 @@ model JobDescription {
   salaryRange     String?
   location        String?
   isRemote        Boolean               @default(false)
+  isHybrid        Boolean               @default(false)
+  jobType         String                @default("FULL_TIME") // INTERNSHIP, FULL_TIME, CONTRACT
   source          String                @default("CURATED")
   isActive        Boolean               @default(true)
   createdAt       DateTime              @default(now())
@@ -252,8 +332,24 @@ model JobDescription {
 
   // Back-relation: recommendations generated against this JD
   jobRecommendations JobRecommendation[]
+  userSavedJobs      UserSavedJob[]
 
   @@map("job_descriptions")
+}
+
+model UserSavedJob {
+  id        String   @id @default(cuid())
+  userId    String
+  jobId     String
+  status    String   // 'SAVED', 'APPLY_LATER', 'APPLIED'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job  JobDescription @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId])
+  @@map("user_saved_jobs")
 }
 
 model JobSkillRequirement {
@@ -276,13 +372,20 @@ model JobRecommendation {
   id                 String   @id @default(cuid())
   analysisId         String
   jobId              String
-  rank               Int      // 1 = best match
-  matchScore         Float    // 0–100
-  matchedSkills      Json     @default("[]") // string[]
-  missingSkills      Json     @default("[]") // string[]
-  reason             String   // AI-generated explanation
-  estimatedReadiness String   // NOT_READY | DEVELOPING | ALMOST_READY | READY
-  improvementTips    Json     @default("[]") // string[]
+  rank                   Int      // 1 = best match
+  matchScore             Float    // 0–100
+  companyMatchScore      Float    @default(0)
+  roleMatchScore         Float    @default(0)
+  matchedSkills          Json     @default("[]") // string[]
+  missingSkills          Json     @default("[]") // string[]
+  reason                 String   // AI-generated explanation
+  nonMatchReason         String   @default("") // Why they didn't match
+  estimatedReadiness     String   // NOT_READY | DEVELOPING | ALMOST_READY | READY
+  improvementTips        Json     @default("[]") // string[]
+  interviewProbability   Float    @default(0)
+  experienceRequired     String   @default("")
+  requiredCertifications Json     @default("[]") // string[]
+  missingCertifications  Json     @default("[]") // string[]
   createdAt          DateTime @default(now())
 
   analysis PlacementAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)

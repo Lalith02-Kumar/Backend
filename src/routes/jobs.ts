@@ -11,54 +11,35 @@ const router = Router();
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Builds a full JobRecommendationCard for a stored JobRecommendation row */
-async function buildCard(rec: {
-  id: string;
-  rank: number;
-  matchScore: number;
-  estimatedReadiness: string;
-  reason: string;
-  matchedSkills: unknown;
-  missingSkills: unknown;
-  improvementTips: unknown;
-  job: {
-    id: string;
-    title: string;
-    company: string;
-    companyTier: string;
-    targetRole: string;
-    description: string;
-    salaryRange: string | null;
-    location: string | null;
-    isRemote: boolean;
-    requiredSkills: Array<{
-      skill: string;
-      category: string;
-      importance: string;
-      frequency: number;
-    }>;
-  };
-}): Promise<JobRecommendationCard> {
+async function buildCard(rec: any): Promise<JobRecommendationCard> {
   return JobRecommenderService.buildCard(
     {
       jobId: rec.job.id,
       rank: rec.rank,
       matchScore: rec.matchScore,
+      companyMatchScore: rec.companyMatchScore,
+      roleMatchScore: rec.roleMatchScore,
       matchedSkills: rec.matchedSkills as string[],
       missingSkills: rec.missingSkills as string[],
       reason: rec.reason,
+      nonMatchReason: rec.nonMatchReason,
       estimatedReadiness: rec.estimatedReadiness as any,
       improvementTips: rec.improvementTips as string[],
+      interviewProbability: rec.interviewProbability,
+      experienceRequired: rec.experienceRequired,
+      requiredCertifications: rec.requiredCertifications as string[],
+      missingCertifications: rec.missingCertifications as string[],
     },
     rec.job,
   );
 }
 
 // ─── GET /api/jobs/recommendations ───────────────────────────────────────────
-// Returns job recommendations from the student's latest completed analysis.
 
 router.get('/recommendations', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
   const userId = req.user!.id;
+
+  const { location, isRemote, isHybrid, jobType, company } = req.query;
 
   const latestAnalysis = await prisma.placementAnalysis.findFirst({
     where: { userId, status: 'COMPLETED' },
@@ -74,8 +55,19 @@ router.get('/recommendations', authenticate, asyncHandler(async (req: AuthReques
     } as ApiResponse);
   }
 
+  // Build filters for the job relation
+  const jobFilters: any = {};
+  if (location) jobFilters.location = { contains: String(location), mode: 'insensitive' };
+  if (isRemote === 'true') jobFilters.isRemote = true;
+  if (isHybrid === 'true') jobFilters.isHybrid = true;
+  if (jobType) jobFilters.jobType = String(jobType);
+  if (company) jobFilters.company = { contains: String(company), mode: 'insensitive' };
+
   const recs = await prisma.jobRecommendation.findMany({
-    where: { analysisId: latestAnalysis.id },
+    where: { 
+      analysisId: latestAnalysis.id,
+      job: Object.keys(jobFilters).length > 0 ? jobFilters : undefined,
+    },
     orderBy: { rank: 'asc' },
     include: {
       job: {
@@ -100,7 +92,6 @@ router.get('/recommendations', authenticate, asyncHandler(async (req: AuthReques
 }));
 
 // ─── GET /api/jobs/recommendations/:analysisId ────────────────────────────────
-// Returns recommendations for a specific analysis.
 
 router.get('/recommendations/:analysisId', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
   const userId = req.user!.id;
@@ -143,7 +134,6 @@ router.get('/recommendations/:analysisId', authenticate, asyncHandler(async (req
 }));
 
 // ─── GET /api/jobs/recommendations/history ────────────────────────────────────
-// Lists all past recommendation sets (one per completed analysis).
 
 router.get('/history', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
   const userId = req.user!.id;
@@ -167,7 +157,7 @@ router.get('/history', authenticate, asyncHandler(async (req: AuthRequest, res: 
   });
 
   const history: RecommendationHistory[] = await Promise.all(
-    analyses.map(async (a: (typeof analyses)[number]) => {
+    analyses.map(async (a: any) => {
       const topMatchRaw = a.jobRecommendations[0];
       const topMatch = topMatchRaw ? await buildCard(topMatchRaw) : null;
 
@@ -186,8 +176,6 @@ router.get('/history', authenticate, asyncHandler(async (req: AuthRequest, res: 
 }));
 
 // ─── POST /api/jobs/recommendations/refresh ───────────────────────────────────
-// Re-runs the recommendation engine against the latest analysis without re-running
-// the full placement analysis. Useful after new JDs are added to the dataset.
 
 const refreshSchema = z.object({
   analysisId: z.string().cuid().optional(),
@@ -197,7 +185,6 @@ router.post('/recommendations/refresh', authenticate, asyncHandler(async (req: A
   const userId = req.user!.id;
   const { analysisId } = refreshSchema.parse(req.body);
 
-  // Find the target analysis
   const analysis = await prisma.placementAnalysis.findFirst({
     where: {
       ...(analysisId ? { id: analysisId } : {}),
@@ -211,12 +198,14 @@ router.post('/recommendations/refresh', authenticate, asyncHandler(async (req: A
   if (!analysis) throw new AppError('No completed analysis found to refresh', 404, 'NOT_FOUND');
 
   // Gather user data
-  const [resume, github] = await Promise.all([
+  const [resume, github, codingProfiles, userProfile] = await Promise.all([
     prisma.resume.findUnique({
       where: { userId },
       include: { skills: true },
     }),
     prisma.gitHubProfile.findUnique({ where: { userId } }),
+    prisma.codingProfile.findMany({ where: { userId, status: 'COMPLETED' } }),
+    prisma.userProfile.findUnique({ where: { userId } }),
   ]);
 
   const allActiveJDs = await prisma.jobDescription.findMany({
@@ -224,17 +213,31 @@ router.post('/recommendations/refresh', authenticate, asyncHandler(async (req: A
     include: { requiredSkills: true },
   });
 
-  const resumeSkillNames = (resume?.skills || []).map((s: { name: string }) => s.name.toLowerCase());
+  const resumeSkillNames = (resume?.skills || []).map((s: any) => s.name.toLowerCase());
   const githubLanguages = github?.topLanguages
     ? (github.topLanguages as Array<{ language: string }>).map((l) => l.language.toLowerCase())
     : [];
+  
+  const parsedResume = resume?.parsedData ? (typeof resume.parsedData === 'string' ? JSON.parse(resume.parsedData) : resume.parsedData) : null;
+  const education = parsedResume?.education || [];
+  const experience = parsedResume?.experience || [];
+  const projects = parsedResume?.projects || [];
+  
+  const codingStats = codingProfiles.map(p => ({
+    platform: p.platform,
+    stats: typeof p.stats === 'string' ? JSON.parse(p.stats) : p.stats,
+  }));
 
   const recommender = new JobRecommenderService();
   const rankedMatches = await recommender.rankJobs({
     resumeSkills: resumeSkillNames,
     githubLanguages,
+    education,
+    experience,
+    projects,
+    codingStats,
     placementScore: analysis.overallScore ?? 0,
-    jobDescriptions: allActiveJDs,
+    jobDescriptions: allActiveJDs as any,
     targetRole: analysis.targetRole,
   });
 
@@ -249,11 +252,18 @@ router.post('/recommendations/refresh', authenticate, asyncHandler(async (req: A
           jobId: match.jobId,
           rank: match.rank,
           matchScore: match.matchScore,
+          companyMatchScore: match.companyMatchScore,
+          roleMatchScore: match.roleMatchScore,
           matchedSkills: match.matchedSkills as any,
           missingSkills: match.missingSkills as any,
           reason: match.reason,
+          nonMatchReason: match.nonMatchReason,
           estimatedReadiness: match.estimatedReadiness,
           improvementTips: match.improvementTips as any,
+          interviewProbability: match.interviewProbability,
+          experienceRequired: match.experienceRequired,
+          requiredCertifications: match.requiredCertifications as any,
+          missingCertifications: match.missingCertifications as any,
         })),
       });
     }
@@ -269,14 +279,51 @@ router.post('/recommendations/refresh', authenticate, asyncHandler(async (req: A
   } as ApiResponse);
 }));
 
+// ─── GET /api/jobs/saved ───────────────────────────────────────────────────────
+
+router.get('/saved', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id;
+  const saved = await prisma.userSavedJob.findMany({
+    where: { userId },
+    include: {
+      job: { include: { requiredSkills: true } },
+    },
+    orderBy: { updatedAt: 'desc' },
+  });
+
+  res.json({ success: true, data: saved } as ApiResponse);
+}));
+
+// ─── POST /api/jobs/:id/save ──────────────────────────────────────────────────
+
+const saveJobSchema = z.object({
+  status: z.enum(['SAVED', 'APPLY_LATER', 'APPLIED']),
+});
+
+router.post('/:id/save', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id;
+  const jobId = req.params.id;
+  const { status } = saveJobSchema.parse(req.body);
+
+  const job = await prisma.jobDescription.findUnique({ where: { id: jobId } });
+  if (!job) throw new AppError('Job not found', 404);
+
+  const savedJob = await prisma.userSavedJob.upsert({
+    where: { userId_jobId: { userId, jobId } },
+    update: { status },
+    create: { userId, jobId, status },
+  });
+
+  res.json({ success: true, data: savedJob } as ApiResponse);
+}));
+
 // ─── GET /api/jobs/:id ────────────────────────────────────────────────────────
-// Returns a single job description with the student's match data if available.
 
 router.get('/:id', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
   const userId = req.user!.id;
   const jobId = req.params.id;
 
-  const [job, latestAnalysis] = await Promise.all([
+  const [job, latestAnalysis, savedState] = await Promise.all([
     prisma.jobDescription.findUnique({
       where: { id: jobId },
       include: { requiredSkills: true },
@@ -286,11 +333,13 @@ router.get('/:id', authenticate, asyncHandler(async (req: AuthRequest, res: Resp
       orderBy: { completedAt: 'desc' },
       select: { id: true },
     }),
+    prisma.userSavedJob.findUnique({
+      where: { userId_jobId: { userId, jobId } },
+    }),
   ]);
 
   if (!job) throw new AppError('Job not found', 404, 'NOT_FOUND');
 
-  // Check if student has a recommendation for this job
   const recommendation = latestAnalysis
     ? await prisma.jobRecommendation.findUnique({
         where: { analysisId_jobId: { analysisId: latestAnalysis.id, jobId } },
@@ -301,14 +350,22 @@ router.get('/:id', authenticate, asyncHandler(async (req: AuthRequest, res: Resp
     success: true,
     data: {
       job,
+      savedStatus: savedState?.status || null,
       recommendation: recommendation
         ? {
             matchScore: recommendation.matchScore,
+            companyMatchScore: recommendation.companyMatchScore,
+            roleMatchScore: recommendation.roleMatchScore,
             matchedSkills: recommendation.matchedSkills,
             missingSkills: recommendation.missingSkills,
             reason: recommendation.reason,
+            nonMatchReason: recommendation.nonMatchReason,
             estimatedReadiness: recommendation.estimatedReadiness,
             improvementTips: recommendation.improvementTips,
+            interviewProbability: recommendation.interviewProbability,
+            experienceRequired: recommendation.experienceRequired,
+            requiredCertifications: recommendation.requiredCertifications,
+            missingCertifications: recommendation.missingCertifications,
             rank: recommendation.rank,
           }
         : null,

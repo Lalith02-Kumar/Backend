@@ -114,11 +114,21 @@ export const placementScorerWorker = new Worker(
           )
         : [];
 
+      const parsedResume = resume?.parsedData ? (typeof resume.parsedData === 'string' ? JSON.parse(resume.parsedData) : resume.parsedData) : null;
+      const codingStats = (codingProfiles || []).map(p => ({
+        platform: p.platform,
+        stats: typeof p.stats === 'string' ? JSON.parse(p.stats) : p.stats,
+      }));
+
       const rankedMatches = await recommender.rankJobs({
         resumeSkills: resumeSkillNames,
         githubLanguages,
+        education: parsedResume?.education || [],
+        experience: parsedResume?.experience || [],
+        projects: parsedResume?.projects || [],
+        codingStats,
         placementScore: placementScore.overall,
-        jobDescriptions: allActiveJDs,
+        jobDescriptions: allActiveJDs as any,
         targetRole,
       });
 
@@ -193,11 +203,18 @@ export const placementScorerWorker = new Worker(
               jobId: match.jobId,
               rank: match.rank,
               matchScore: match.matchScore,
+              companyMatchScore: match.companyMatchScore,
+              roleMatchScore: match.roleMatchScore,
               matchedSkills: match.matchedSkills as any,
               missingSkills: match.missingSkills as any,
               reason: match.reason,
+              nonMatchReason: match.nonMatchReason,
               estimatedReadiness: match.estimatedReadiness,
               improvementTips: match.improvementTips as any,
+              interviewProbability: match.interviewProbability,
+              experienceRequired: match.experienceRequired,
+              requiredCertifications: match.requiredCertifications as any,
+              missingCertifications: match.missingCertifications as any,
             })),
             skipDuplicates: true,
           });
