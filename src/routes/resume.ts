@@ -162,10 +162,13 @@ router.post('/analyze', authenticate, asyncHandler(async (req: AuthRequest, res:
     });
 
     try {
-      // Download the file from Cloudinary to buffer
-      const axios = require('axios');
-      const fileResponse = await axios.get(resume.cloudinaryUrl, { responseType: 'arraybuffer' });
-      const fileBuffer = Buffer.from(fileResponse.data);
+      // Download the file from Cloudinary to buffer using native fetch
+      const fileResponse = await fetch(resume.cloudinaryUrl);
+      if (!fileResponse.ok) {
+        throw new Error(`Failed to fetch resume from storage: ${fileResponse.statusText} (${fileResponse.status})`);
+      }
+      const arrayBuffer = await fileResponse.arrayBuffer();
+      const fileBuffer = Buffer.from(arrayBuffer);
 
       // Run AI parsing
       const { ResumeParserService } = require('../services/ai/resumeParser.service');

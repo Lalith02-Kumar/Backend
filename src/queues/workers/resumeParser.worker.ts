@@ -27,8 +27,12 @@ export const resumeParserWorker = new Worker(
         fileBuffer = fs.readFileSync(localFilePath);
         fs.unlinkSync(localFilePath); // Clean up the temp file
       } else {
-        const response = await axios.get(cloudinaryUrl, { responseType: 'arraybuffer' });
-        fileBuffer = Buffer.from(response.data);
+        const response = await fetch(cloudinaryUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch resume from storage: ${response.statusText} (${response.status})`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        fileBuffer = Buffer.from(arrayBuffer);
       }
 
       await job.updateProgress(30);
