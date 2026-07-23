@@ -11,7 +11,7 @@ export function getGeminiModel() {
     genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
   }
   return genAI.getGenerativeModel({
-    model: 'gemini-1.5-pro',
+    model: 'gemini-2.5-flash',
     generationConfig: {
       responseMimeType: 'application/json',
     },
