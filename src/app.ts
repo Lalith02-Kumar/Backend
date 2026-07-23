@@ -13,6 +13,9 @@ import apiRoutes from './routes';
 
 const app = express();
 
+// Trust the first proxy (Railway load balancer) for accurate IP resolution in rate limiting
+app.set('trust proxy', 1);
+
 app.use(helmet());
 
 // Support multiple CORS origins (comma-separated in CLIENT_URL)
