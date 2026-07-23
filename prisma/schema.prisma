@@ -113,6 +113,7 @@ model User {
   profile        UserProfile?
   resume         Resume?
   githubProfile  GitHubProfile?
+  githubAnalysis GitHubAnalysis?
   codingProfiles CodingProfile[]
   analyses       PlacementAnalysis[]
   activities     ActivityLog[]
@@ -382,4 +383,83 @@ model ActivityLog {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("activity_logs")
+}
+
+// ─── GitHub Intelligence Models ──────────────────────────────────────────────────
+
+model GitHubAnalysis {
+  id                 String                  @id @default(cuid())
+  userId             String                  @unique
+  githubScore        Int                     @default(0)
+  profileStrength    String                  @default("Medium")
+  aiConfidence       Int                     @default(80)
+  overallRating      String                  @default("Good")
+  placementReadiness Int                     @default(50)
+  skillAnalysis      Json                    @default("{}")
+  technologyCoverage Json                    @default("{}")
+  codingPractices    Json                    @default("{}")
+  projectDiversity   Json                    @default("{}")
+  careerPrediction   Json                    @default("{}")
+  roadmap            Json                    @default("[]")
+  charts             Json                    @default("{}")
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  user               User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repositories       RepositoryAnalysis[]
+  recommendations    ProjectRecommendation[]
+  reports            GitHubReport[]
+
+  @@map("github_analyses")
+}
+
+model RepositoryAnalysis {
+  id                    String         @id @default(cuid())
+  analysisId            String
+  repoName              String
+  projectScore          Int            @default(0)
+  recruiterInterest     Int            @default(0)
+  complexity            String         @default("Intermediate")
+  resumeValue           String         @default("Good")
+  innovation            String         @default("Medium")
+  architecture          String         @default("Good")
+  documentation         String         @default("Good")
+  deployment            String         @default("None")
+  strengths             String[]
+  missing               String[]
+  estimatedResumeBoost  Int            @default(0)
+  aiImprovedDescription String         @default("")
+  scoreBreakdown        Json           @default("{}")
+  createdAt             DateTime       @default(now())
+
+  analysis              GitHubAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@map("repository_analyses")
+}
+
+model ProjectRecommendation {
+  id           String         @id @default(cuid())
+  analysisId   String
+  title        String
+  difficulty   String
+  technologies String[]
+  resumeBoost  String
+  githubReady  Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+
+  analysis     GitHubAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@map("project_recommendations")
+}
+
+model GitHubReport {
+  id          String         @id @default(cuid())
+  analysisId  String
+  downloadUrl String
+  shareUrl    String
+  createdAt   DateTime       @default(now())
+
+  analysis    GitHubAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@map("github_reports")
 }
