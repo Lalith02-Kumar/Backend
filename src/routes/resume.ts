@@ -136,6 +136,192 @@ router.get('/status/:jobId', authenticate, asyncHandler(async (req: AuthRequest,
   } as ApiResponse);
 }));
 
+// POST /api/resume/analyze
+router.post('/analyze', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { forceRefresh } = req.body;
+  
+  // Find user's resume
+  const resume = await prisma.resume.findUnique({
+    where: { userId: req.user!.id }
+  });
+
+  if (!resume) {
+    throw new AppError('No resume uploaded yet. Please upload a resume first.', 400, 'RESUME_NOT_FOUND');
+  }
+
+  let parsed: any;
+
+  if (!forceRefresh && resume.status === 'COMPLETED' && resume.parsedData) {
+    // Return cached results
+    parsed = resume.parsedData;
+  } else {
+    // Update status to processing
+    await prisma.resume.update({
+      where: { id: resume.id },
+      data: { status: 'PROCESSING' }
+    });
+
+    try {
+      // Download the file from Cloudinary to buffer
+      const axios = require('axios');
+      const fileResponse = await axios.get(resume.cloudinaryUrl, { responseType: 'arraybuffer' });
+      const fileBuffer = Buffer.from(fileResponse.data);
+
+      // Run AI parsing
+      const { ResumeParserService } = require('../services/ai/resumeParser.service');
+      const parser = new ResumeParserService();
+      
+      const userProfile = await prisma.userProfile.findUnique({ where: { userId: req.user!.id } });
+      const targetRole = userProfile?.targetRole || 'SOFTWARE_ENGINEER';
+
+      parsed = await parser.parse(fileBuffer, resume.cloudinaryUrl, targetRole);
+
+      // Save to database
+      await prisma.resume.update({
+        where: { id: resume.id },
+        data: {
+          parsedData: parsed as any,
+          status: 'COMPLETED',
+          errorMessage: null
+        }
+      });
+      
+      // Save new activity log
+      await prisma.activityLog.create({
+        data: {
+          userId: req.user!.id,
+          type: 'RESUME_PARSED',
+          title: 'Resume Analyzed',
+          description: `Extracted ${parsed.skills?.length || 0} skills from your resume`,
+        }
+      });
+
+      // Create a PlacementAnalysis record for history
+      if (parsed.analysis) {
+        await prisma.placementAnalysis.create({
+          data: {
+            userId: req.user!.id,
+            status: 'COMPLETED',
+            targetRole: targetRole as any,
+            overallScore: parsed.analysis.atsScore || parsed.analysis.resumeScore || 60,
+            scoreBreakdown: parsed.analysis.atsScoreDashboard as any,
+            completedAt: new Date()
+          }
+        });
+      }
+    } catch (error: any) {
+      await prisma.resume.update({
+        where: { id: resume.id },
+        data: { status: 'FAILED', errorMessage: error.message }
+      });
+      throw new AppError(`Analysis failed: ${error.message}`, 500, 'ANALYSIS_ERROR');
+    }
+  }
+
+  // Fetch past analyses for history
+  const analyses = await prisma.placementAnalysis.findMany({
+    where: { userId: req.user!.id, status: 'COMPLETED' },
+    orderBy: { completedAt: 'desc' },
+    take: 10
+  });
+
+  const history = analyses.map((a, idx) => ({
+    version: `Version ${analyses.length - idx}`,
+    score: a.overallScore || 60,
+    date: a.completedAt ? new Date(a.completedAt).toLocaleDateString() : 'N/A'
+  }));
+
+  const analysis = parsed.analysis || {};
+
+  // Formulate consolidated response
+  const consolidated = {
+    resumeSummary: {
+      name: parsed.contactInfo?.name || 'Unknown',
+      email: parsed.contactInfo?.email || 'N/A',
+      phone: parsed.contactInfo?.phone || 'N/A',
+      location: parsed.contactInfo?.location || 'N/A',
+      targetRole: resume.originalFileName ? 'Software Engineer' : 'Not Set',
+      experienceLevel: analysis.summary?.experienceLevel || 'Entry-level',
+      aiConfidence: analysis.summary?.aiConfidence || 85,
+      lastUpdated: resume.updatedAt ? new Date(resume.updatedAt).toLocaleDateString() : 'N/A'
+    },
+    resumeScore: {
+      overall: analysis.resumeScore || 60,
+      ats: analysis.atsScore || 60,
+      placement: analysis.placementReadinessScore || 50
+    },
+    atsAnalysis: {
+      overallAtsScore: analysis.atsScoreDashboard?.overallAtsScore || 60,
+      formatting: analysis.atsScoreDashboard?.formatting || 70,
+      keywords: analysis.atsScoreDashboard?.keywords || 60,
+      skills: analysis.atsScoreDashboard?.skills || 75,
+      experience: analysis.atsScoreDashboard?.experience || 50,
+      education: analysis.atsScoreDashboard?.education || 70,
+      readability: analysis.atsScoreDashboard?.readability || 80,
+      atsCompatibility: analysis.atsScoreDashboard?.atsCompatibility || 75
+    },
+    grammarAnalysis: {
+      grammarScore: analysis.resumeQualityAnalysis?.grammarScore || 85,
+      grammarIssues: analysis.grammarIssues || [],
+      corrections: analysis.grammarAnalysis || []
+    },
+    strengths: analysis.strengths || [],
+    keywordAnalysis: {
+      found: analysis.keywordAnalysis?.found || [],
+      missing: analysis.keywordAnalysis?.missing || [],
+      repeated: analysis.keywordAnalysis?.repeated || [],
+      atsKeywords: analysis.keywordAnalysis?.found || [],
+      density: analysis.keywordAnalysis?.density || {}
+    },
+    roleMatching: analysis.roleMatching || [],
+    missingSkills: analysis.missingSkillsList || [],
+    educationAnalysis: {
+      educationScore: analysis.educationAnalysis?.educationScore || 70,
+      industryRelevance: analysis.educationAnalysis?.industryRelevance || 'Medium',
+      suggestions: analysis.educationAnalysis?.suggestions || [],
+      details: parsed.education || []
+    },
+    certificationAnalysis: {
+      existing: analysis.certificationAnalysis?.existing || [],
+      recommended: analysis.certificationAnalysis?.recommended || []
+    },
+    experienceAnalysis: {
+      experienceScore: analysis.experienceAnalysis?.experienceScore || 40,
+      internshipReadiness: analysis.experienceAnalysis?.internshipReadiness || 60,
+      industryReadiness: analysis.experienceAnalysis?.industryReadiness || 45,
+      volunteerSuggestions: analysis.experienceAnalysis?.volunteerSuggestions || [],
+      hackathonSuggestions: analysis.experienceAnalysis?.hackathonSuggestions || [],
+      details: parsed.experience || []
+    },
+    projectAnalysis: analysis.projectsAnalysis || [],
+    recommendedProjects: analysis.recommendedProjects || [],
+    careerInsights: analysis.careerInsights || {},
+    roadmap: analysis.roadmap || [],
+    charts: {
+      atsGauge: [
+        { name: 'ATS Score', value: analysis.atsScore || 60, fill: 'var(--primary)' }
+      ],
+      roleMatch: (analysis.roleMatching || []).map((r: any) => ({ name: r.role, match: r.percentage })),
+      keywordChart: Object.entries(analysis.keywordAnalysis?.density || {}).map(([keyword, count]) => ({ keyword, count })),
+      skillsChart: (parsed.skills || []).slice(0, 8).map((s: any) => ({
+        name: typeof s === 'string' ? s : s.name,
+        score: typeof s === 'string' ? 60 : Math.round((s.confidence || 0.8) * 100)
+      })),
+      historyChart: history
+    },
+    report: {
+      downloadUrl: `/api/report/${resume.id}/download`,
+      shareUrl: `/api/report/${resume.id}/share`
+    },
+    resumeHistory: history
+  };
+
+  res.json({
+    success: true,
+    data: consolidated
+  } as ApiResponse);
+}));
+
 // POST /api/resume/chat
 router.post('/chat', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
   const { message } = req.body;
