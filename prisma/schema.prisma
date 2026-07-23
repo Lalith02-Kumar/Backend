@@ -226,6 +226,8 @@ model Resume {
   user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   skills ResumeSkill[]
 
+  @@index([userId])
+  @@index([userId, status])
   @@map("resumes")
 }
 
@@ -266,6 +268,8 @@ model GitHubProfile {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([userId, status])
   @@map("github_profiles")
 }
 
@@ -286,6 +290,8 @@ model CodingProfile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, platform])
+  @@index([userId])
+  @@index([userId, status])
   @@map("coding_profiles")
 }
 
@@ -417,6 +423,8 @@ model PlacementAnalysis {
   roadmap             LearningRoadmap?
   jobRecommendations  JobRecommendation[]
 
+  @@index([userId])
+  @@index([userId, status])
   @@map("placement_analyses")
 }
 
@@ -485,6 +493,8 @@ model ActivityLog {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([userId, createdAt(sort: Desc)])
   @@map("activity_logs")
 }
 
