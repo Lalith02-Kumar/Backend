@@ -167,6 +167,62 @@ router.get('/', authenticate, asyncHandler(async (req: AuthRequest, res: Respons
   res.json({ success: true, data: user } as ApiResponse);
 }));
 
+// PUT /api/v1/profile
+router.put('/', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const schema = z.object({
+    fullName: z.string().min(2).max(100).optional(),
+    college: z.string().min(2).max(200).optional(),
+    branch: z.string().min(2).max(100).optional(),
+    graduationYear: z.number().int().min(2020).max(2030).optional(),
+    cgpa: z.number().min(0).max(10).optional(),
+    targetRole: z.enum([
+      'SOFTWARE_ENGINEER', 'FRONTEND_DEVELOPER', 'BACKEND_DEVELOPER',
+      'FULLSTACK_DEVELOPER', 'DATA_ANALYST', 'AI_ENGINEER', 'ML_ENGINEER',
+      'DEVOPS_ENGINEER', 'QA_ENGINEER', 'CYBERSECURITY_ANALYST', 'CLOUD_ENGINEER', 'PRODUCT_ENGINEER',
+    ]).optional(),
+    bio: z.string().max(500).optional().nullable(),
+    phoneNumber: z.string().optional().nullable(),
+    dateOfBirth: z.string().optional().nullable(),
+    gender: z.string().optional().nullable(),
+    location: z.string().optional().nullable(),
+    degree: z.string().optional().nullable(),
+    university: z.string().optional().nullable(),
+    preferredLocation: z.string().optional().nullable(),
+    experienceMonths: z.number().int().min(0).optional().nullable(),
+    preferredCompanies: z.array(z.string()).max(10).optional(),
+    preferredTechStack: z.array(z.string()).max(20).optional(),
+    linkedinUrl: z.string().url().optional().or(z.literal('')).nullable(),
+    portfolioUrl: z.string().url().optional().or(z.literal('')).nullable(),
+  });
+
+  const data = schema.parse(req.body);
+
+  const parsedData = {
+    ...data,
+    dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : undefined,
+  };
+
+  const updated = await prisma.userProfile.upsert({
+    where: { userId: req.user!.id },
+    update: { ...parsedData },
+    create: { 
+      userId: req.user!.id, 
+      fullName: parsedData.fullName || '', 
+      college: parsedData.college || '', 
+      branch: parsedData.branch || '', 
+      graduationYear: parsedData.graduationYear || 0, 
+      cgpa: parsedData.cgpa || 0, 
+      targetRole: parsedData.targetRole || 'SOFTWARE_ENGINEER',
+      ...parsedData 
+    }
+  });
+
+  await recalculateUserCompleteness(req.user!.id);
+
+  res.json({ success: true, data: updated } as ApiResponse);
+}));
+
+
 // GET /api/v1/profile/completeness
 router.get('/completeness', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
   const completeness = await recalculateUserCompleteness(req.user!.id);
