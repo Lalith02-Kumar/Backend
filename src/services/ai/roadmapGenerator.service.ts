@@ -115,79 +115,124 @@ Respond with ONLY valid JSON:
   }
 
   private generateTemplateRoadmap(gaps: SkillGap[], targetRole: string, weeks: number): LearningRoadmap {
-    const totalWeeks = Math.min(weeks, 12);
+    const totalWeeks = Math.max(4, Math.min(weeks, 12));
+    
+    // Fallback if there are no gaps
+    const activeGaps = gaps.length > 0 ? gaps : [
+      { skill: 'Core Software Engineering', priority: 'HIGH', reason: 'Strengthen core computer science foundations.', learningResources: [] },
+      { skill: 'System Design', priority: 'HIGH', reason: 'Learn scalability, microservices, and system architecture.', learningResources: [] }
+    ];
+
+    const phase1Focus = activeGaps.slice(0, 2).map(g => g.skill);
+    const phase2Focus = activeGaps.slice(2, 5).map(g => g.skill);
+    if (phase2Focus.length === 0) phase2Focus.push(targetRole + ' Best Practices');
+
+    const projectTechs = activeGaps.slice(0, 3).map(g => g.skill);
+
     return {
       id: '',
       totalWeeks,
       phases: [
         {
           phaseNumber: 1,
-          title: 'Foundation & Quick Wins',
-          description: 'Build core skills and improve your profile visibility',
+          title: `Phase 1: Foundation & Quick Wins (${phase1Focus.join(', ')})`,
+          description: `Focus on mastering your primary missing skills: ${phase1Focus.join(' and ')}.`,
           weekStart: 1,
-          weekEnd: Math.floor(totalWeeks * 0.25),
-          focus: gaps.slice(0, 2).map((g) => g.skill),
-          tasks: gaps.slice(0, 2).map((gap) => ({
-            title: `Learn ${gap.skill}`,
-            description: gap.reason,
-            estimatedHours: 20,
-            resources: gap.learningResources,
+          weekEnd: Math.max(1, Math.floor(totalWeeks * 0.3)),
+          focus: phase1Focus,
+          tasks: activeGaps.slice(0, 2).map((gap) => ({
+            title: `Master ${gap.skill}`,
+            description: gap.reason || `Learn the fundamentals, standard libraries, and common design patterns of ${gap.skill}.`,
+            estimatedHours: 15,
+            resources: gap.learningResources && gap.learningResources.length > 0 ? gap.learningResources : [
+              { title: `${gap.skill} Official Documentation`, url: `https://www.google.com/search?q=${encodeURIComponent(gap.skill + ' documentation')}`, type: 'DOCUMENTATION', isPaid: false }
+            ],
             isCompleted: false,
           })),
-          projects: [],
+          projects: [
+            {
+              title: `${phase1Focus[0] || 'Core'} Implementation Prototype`,
+              description: `A hands-on coding prototype designed to put your newly acquired skills in ${phase1Focus.join(' & ')} into practice.`,
+              technologies: phase1Focus,
+              difficulty: 'BEGINNER',
+              estimatedDays: 4,
+              impactOnScore: 5,
+              features: ['Basic CRUD operations', 'Error handling', 'Unit testing'],
+              whyBuild: `Building a prototype is the fastest way to solidify your understanding of ${phase1Focus.join(' and ')} before tackling larger projects.`
+            }
+          ],
         },
         {
           phaseNumber: 2,
-          title: 'Core Skills Development',
-          description: 'Master the most impactful missing skills',
-          weekStart: Math.floor(totalWeeks * 0.25) + 1,
-          weekEnd: Math.floor(totalWeeks * 0.6),
-          focus: gaps.slice(2, 5).map((g) => g.skill),
-          tasks: [],
+          title: `Phase 2: Core Skills Development (${phase2Focus.join(', ')})`,
+          description: `Deepen your technical expertise in ${phase2Focus.join(' & ')} and start building your portfolio.`,
+          weekStart: Math.max(1, Math.floor(totalWeeks * 0.3)) + 1,
+          weekEnd: Math.max(2, Math.floor(totalWeeks * 0.7)),
+          focus: phase2Focus,
+          tasks: activeGaps.slice(2, 5).map((gap) => ({
+            title: `Integrate ${gap.skill}`,
+            description: gap.reason || `Implement projects and solve practical coding problems using ${gap.skill}.`,
+            estimatedHours: 20,
+            resources: gap.learningResources && gap.learningResources.length > 0 ? gap.learningResources : [
+              { title: `Introduction to ${gap.skill}`, url: `https://www.google.com/search?q=${encodeURIComponent(gap.skill + ' tutorial')}`, type: 'TUTORIAL', isPaid: false }
+            ],
+            isCompleted: false,
+          })),
           projects: [
             {
-              title: `${targetRole} Portfolio Project`,
-              description: `Build a full-featured application demonstrating your ${targetRole} skills`,
-              technologies: gaps.slice(0, 3).map((g) => g.skill),
+              title: `Advanced ${targetRole} Capstone`,
+              description: `Build a highly scalable, real-world portfolio application implementing ${projectTechs.join(', ')}.`,
+              technologies: projectTechs,
               difficulty: 'INTERMEDIATE',
-              estimatedDays: 14,
-              impactOnScore: 15,
-              features: ['User authentication', 'Data visualization', 'API integration'],
-              whyBuild: 'Portfolio projects are the #1 factor that differentiates candidates during shortlisting',
-            },
+              estimatedDays: 10,
+              impactOnScore: 12,
+              features: ['Secure Authentication', 'Database integration with indexing', 'REST API and endpoints'],
+              whyBuild: `Demonstrating proficiency in ${projectTechs.join(' and ')} directly targets the critical requirements in active ${targetRole} job descriptions.`
+            }
           ],
         },
         {
           phaseNumber: 3,
-          title: 'Interview Preparation',
-          description: 'Polish your profile and prepare for interviews',
-          weekStart: Math.floor(totalWeeks * 0.6) + 1,
+          title: 'Phase 3: Interview Preparation & Polish',
+          description: 'Refine your resume, optimize your GitHub repositories, and practice mock technical interviews.',
+          weekStart: Math.max(2, Math.floor(totalWeeks * 0.7)) + 1,
           weekEnd: totalWeeks,
-          focus: ['DSA Practice', 'System Design', 'Resume Polish'],
+          focus: ['Data Structures & Algorithms', 'System Architecture', 'Interview Coding Practice'],
           tasks: [
             {
-              title: 'Solve 50 LeetCode Problems',
-              description: 'Focus on Medium difficulty — Arrays, Trees, DP patterns',
-              estimatedHours: 40,
-              resources: [{ title: 'LeetCode Top Interview 150', url: 'https://leetcode.com/studyplan/top-interview-150/', type: 'PRACTICE', isPaid: false }],
+              title: 'Solve DSA Problems & Review Patterns',
+              description: 'Focus on Arrays, Dynamic Programming, Trees, and Graph patterns relevant to placement evaluations.',
+              estimatedHours: 30,
+              resources: [
+                { title: 'LeetCode Top Interview 150', url: 'https://leetcode.com/studyplan/top-interview-150/', type: 'PRACTICE', isPaid: false }
+              ],
               isCompleted: false,
             },
+            {
+              title: 'Mock Placement Interviews',
+              description: 'Practice answering behavioral questions and solving live coding exercises under timed conditions.',
+              estimatedHours: 10,
+              resources: [
+                { title: 'Tech Interview Handbook', url: 'https://www.techinterviewhandbook.org/', type: 'TUTORIAL', isPaid: false }
+              ],
+              isCompleted: false,
+            }
           ],
           projects: [],
         },
       ],
       milestones: [
         {
-          title: 'Core Skills Ready',
-          description: `Know the top 3 skills required for ${targetRole}`,
-          targetWeek: Math.floor(totalWeeks * 0.4),
+          title: 'Foundation Verified',
+          description: `Demonstrated basic proficiency in ${phase1Focus.join(' and ')}.`,
+          targetWeek: Math.max(1, Math.floor(totalWeeks * 0.3)),
           isAchieved: false,
           requiredTasks: [],
         },
         {
-          title: 'Portfolio Complete',
-          description: '2+ strong GitHub projects live',
-          targetWeek: Math.floor(totalWeeks * 0.7),
+          title: 'Capstone Project Completed',
+          description: `Finished the portfolio project utilizing ${projectTechs.slice(0, 2).join(' and ')}.`,
+          targetWeek: Math.max(2, Math.floor(totalWeeks * 0.7)),
           isAchieved: false,
           requiredTasks: [],
         },
