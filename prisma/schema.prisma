@@ -1,0 +1,384 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+// Only STUDENT role — no admin-managed workflow in PlacementIQ
+enum UserRole {
+  STUDENT
+}
+
+enum ProcessingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum TargetRole {
+  SOFTWARE_ENGINEER
+  FRONTEND_DEVELOPER
+  BACKEND_DEVELOPER
+  FULLSTACK_DEVELOPER
+  DATA_ANALYST
+  AI_ENGINEER
+  ML_ENGINEER
+  DEVOPS_ENGINEER
+  QA_ENGINEER
+  CYBERSECURITY_ANALYST
+  CLOUD_ENGINEER
+  PRODUCT_ENGINEER
+}
+
+enum SkillCategory {
+  LANGUAGE
+  FRAMEWORK
+  DATABASE
+  CLOUD
+  DEVOPS
+  AI_ML
+  TOOL
+  SOFT_SKILL
+  OTHER
+}
+
+enum ProficiencyLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+enum SkillSource {
+  RESUME
+  GITHUB
+  CODING_PROFILE
+  SELF_REPORTED
+}
+
+enum GapPriority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum CompanyTier {
+  FAANG
+  PRODUCT
+  STARTUP
+  SERVICE
+  MNC
+}
+
+enum CodingPlatform {
+  LEETCODE
+  CODEFORCES
+  CODECHEF
+  GFG
+  HACKERRANK
+}
+
+enum RecommendationType {
+  SKILL_ACQUISITION
+  PROJECT_BUILD
+  RESUME_IMPROVEMENT
+  PROFILE_ENHANCEMENT
+  CODING_PRACTICE
+}
+
+// ─── User ──────────────────────────────────────────────────────────────────
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  displayName String
+  photoURL    String?
+  firebaseUid String   @unique
+  role        UserRole @default(STUDENT)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  profile        UserProfile?
+  resume         Resume?
+  githubProfile  GitHubProfile?
+  codingProfiles CodingProfile[]
+  analyses       PlacementAnalysis[]
+  activities     ActivityLog[]
+
+  @@map("users")
+}
+
+// ─── Profile ──────────────────────────────────────────────────────────────────
+
+model UserProfile {
+  id                  String     @id @default(cuid())
+  userId              String     @unique
+  fullName            String
+  college             String
+  branch              String
+  graduationYear      Int
+  cgpa                Float
+  targetRole          TargetRole
+  preferredCompanies  String[]
+  preferredTechStack  String[]
+  bio                 String?
+  linkedinUrl         String?
+  portfolioUrl        String?
+  isComplete          Boolean    @default(false)
+  profileCompleteness Int        @default(0)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+// ─── Resume ───────────────────────────────────────────────────────────────────
+
+model Resume {
+  id                 String           @id @default(cuid())
+  userId             String           @unique
+  originalFileName   String
+  cloudinaryUrl      String
+  cloudinaryPublicId String
+  fileSize           Int
+  mimeType           String
+  parsedData         Json?
+  status             ProcessingStatus @default(PENDING)
+  errorMessage       String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skills ResumeSkill[]
+
+  @@map("resumes")
+}
+
+model ResumeSkill {
+  id               String           @id @default(cuid())
+  resumeId         String
+  name             String
+  category         SkillCategory
+  proficiencyLevel ProficiencyLevel @default(INTERMEDIATE)
+  source           SkillSource      @default(RESUME)
+  confidence       Float            @default(1.0)
+  createdAt        DateTime         @default(now())
+
+  resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@map("resume_skills")
+}
+
+// ─── GitHub Profile ───────────────────────────────────────────────────────────
+
+model GitHubProfile {
+  id            String           @id @default(cuid())
+  userId        String           @unique
+  username      String
+  profileUrl    String
+  avatarUrl     String?
+  bio           String?
+  publicRepos   Int              @default(0)
+  followers     Int              @default(0)
+  following     Int              @default(0)
+  contributions Int?
+  topLanguages  Json             @default("[]")
+  repositories  Json             @default("[]")
+  status        ProcessingStatus @default(PENDING)
+  analyzedAt    DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("github_profiles")
+}
+
+// ─── Coding Profiles ──────────────────────────────────────────────────────────
+
+model CodingProfile {
+  id         String           @id @default(cuid())
+  userId     String
+  platform   CodingPlatform
+  username   String
+  profileUrl String
+  stats      Json             @default("{}")
+  status     ProcessingStatus @default(PENDING)
+  fetchedAt  DateTime?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, platform])
+  @@map("coding_profiles")
+}
+
+// ─── Job Descriptions ─────────────────────────────────────────────────────────
+// Curated dataset used by the recommendation engine — not admin-managed
+
+model JobDescription {
+  id              String                @id @default(cuid())
+  title           String
+  company         String
+  companyTier     CompanyTier
+  targetRole      TargetRole
+  description     String
+  requiredSkills  JobSkillRequirement[]
+  preferredSkills Json                  @default("[]")
+  minExperience   Int?
+  salaryRange     String?
+  location        String?
+  isRemote        Boolean               @default(false)
+  source          String                @default("CURATED")
+  isActive        Boolean               @default(true)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  // Back-relation: recommendations generated against this JD
+  jobRecommendations JobRecommendation[]
+
+  @@map("job_descriptions")
+}
+
+model JobSkillRequirement {
+  id         String        @id @default(cuid())
+  jobId      String
+  skill      String
+  category   SkillCategory
+  importance String        // MUST_HAVE | GOOD_TO_HAVE | BONUS
+  frequency  Float         @default(0.5)
+
+  job JobDescription @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@map("job_skill_requirements")
+}
+
+// ─── Job Recommendations ──────────────────────────────────────────────────────
+// AI-generated per analysis — ranks curated JDs against student profile
+
+model JobRecommendation {
+  id                 String   @id @default(cuid())
+  analysisId         String
+  jobId              String
+  rank               Int      // 1 = best match
+  matchScore         Float    // 0–100
+  matchedSkills      Json     @default("[]") // string[]
+  missingSkills      Json     @default("[]") // string[]
+  reason             String   // AI-generated explanation
+  estimatedReadiness String   // NOT_READY | DEVELOPING | ALMOST_READY | READY
+  improvementTips    Json     @default("[]") // string[]
+  createdAt          DateTime @default(now())
+
+  analysis PlacementAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  job      JobDescription    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([analysisId, jobId])
+  @@map("job_recommendations")
+}
+
+// ─── Placement Analysis ───────────────────────────────────────────────────────
+
+model PlacementAnalysis {
+  id                 String           @id @default(cuid())
+  userId             String
+  status             ProcessingStatus @default(PENDING)
+  targetRole         TargetRole
+  overallScore       Float?
+  scoreBreakdown     Json?
+  interviewReadiness Json?
+  matchedCompanies   Json?
+  errorMessage       String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  completedAt        DateTime?
+
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skillGaps           SkillGap[]
+  recommendations     Recommendation[]
+  roadmap             LearningRoadmap?
+  jobRecommendations  JobRecommendation[]
+
+  @@map("placement_analyses")
+}
+
+model SkillGap {
+  id                   String            @id @default(cuid())
+  analysisId           String
+  skill                String
+  category             SkillCategory
+  priority             GapPriority
+  currentLevel         ProficiencyLevel?
+  requiredLevel        ProficiencyLevel
+  frequencyInJDs       Float             @default(0.5)
+  importanceScore      Float             @default(50)
+  estimatedTimeToLearn String
+  reason               String
+  learningResources    Json              @default("[]")
+  createdAt            DateTime          @default(now())
+
+  analysis PlacementAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@map("skill_gaps")
+}
+
+model Recommendation {
+  id          String             @id @default(cuid())
+  analysisId  String
+  type        RecommendationType
+  title       String
+  description String
+  impact      String             // HIGH | MEDIUM | LOW
+  effort      String             // HIGH | MEDIUM | LOW
+  evidence    String
+  actionItems Json               @default("[]")
+  createdAt   DateTime           @default(now())
+
+  analysis PlacementAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@map("recommendations")
+}
+
+model LearningRoadmap {
+  id         String    @id @default(cuid())
+  analysisId String    @unique
+  totalWeeks Int
+  phases     Json      @default("[]")
+  milestones Json      @default("[]")
+  targetDate DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  analysis PlacementAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@map("learning_roadmaps")
+}
+
+// ─── Activity Log ─────────────────────────────────────────────────────────────
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String
+  title       String
+  description String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("activity_logs")
+}
