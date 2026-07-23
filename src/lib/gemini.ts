@@ -1,16 +1,32 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { logger } from './logger';
 
-let genAI: GoogleGenerativeAI | null = null;
+let currentKeyIndex = 0;
+const genAIClients: GoogleGenerativeAI[] = [];
 
 export function getGeminiModel() {
-  if (!genAI) {
-    if (!process.env.GEMINI_API_KEY) {
-      logger.warn('GEMINI_API_KEY is not set. Gemini API calls will fail.');
+  // Initialize clients array on first call
+  if (genAIClients.length === 0) {
+    const keysString = process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '';
+    const keys = keysString.split(',').map(k => k.trim()).filter(k => k.length > 0);
+    
+    if (keys.length === 0) {
+      logger.warn('No GEMINI API keys found in environment variables. API calls will fail.');
+      keys.push(''); // Push an empty string so it doesn't crash immediately, but will fail auth
     }
-    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+
+    keys.forEach(key => {
+      genAIClients.push(new GoogleGenerativeAI(key));
+    });
+    
+    logger.info(`Initialized Gemini AI with ${keys.length} API keys for load balancing.`);
   }
-  return genAI.getGenerativeModel({
+
+  // Round-robin selection
+  const client = genAIClients[currentKeyIndex];
+  currentKeyIndex = (currentKeyIndex + 1) % genAIClients.length;
+
+  return client.getGenerativeModel({
     model: 'gemini-2.5-flash',
     generationConfig: {
       responseMimeType: 'application/json',
