@@ -14,6 +14,7 @@ export function getGeminiModel() {
     model: 'gemini-2.5-flash',
     generationConfig: {
       responseMimeType: 'application/json',
+      temperature: 0,
     },
   });
 }
