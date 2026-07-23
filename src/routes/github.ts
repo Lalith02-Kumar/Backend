@@ -384,7 +384,22 @@ router.get('/', authenticate, asyncHandler(async (req: AuthRequest, res: Respons
   const profile = await prisma.gitHubProfile.findUnique({
     where: { userId: req.user!.id },
   });
-  res.json({ success: true, data: profile } as ApiResponse);
+  if (!profile) {
+    return res.json({ success: true, data: null } as ApiResponse);
+  }
+
+  const githubAnalysis = await prisma.gitHubAnalysis.findUnique({
+    where: { userId: req.user!.id },
+    include: { recommendations: true }
+  });
+
+  res.json({
+    success: true,
+    data: {
+      ...profile,
+      githubAnalysis
+    }
+  } as ApiResponse);
 }));
 
 // GET /api/github/status/:jobId
