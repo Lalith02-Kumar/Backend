@@ -236,14 +236,20 @@ router.post('/analyze', authenticate, asyncHandler(async (req: AuthRequest, res:
 
   const analysis = parsed.analysis || {};
 
+  // Fetch full user and profile as fallback for contact info
+  const fullUser = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    include: { profile: true }
+  });
+
   // Formulate consolidated response
   const consolidated = {
     resumeSummary: {
-      name: parsed.contactInfo?.name || 'Unknown',
-      email: parsed.contactInfo?.email || 'N/A',
+      name: parsed.contactInfo?.name || fullUser?.profile?.fullName || fullUser?.displayName || 'Unknown',
+      email: parsed.contactInfo?.email || fullUser?.email || req.user?.email || 'N/A',
       phone: parsed.contactInfo?.phone || 'N/A',
       location: parsed.contactInfo?.location || 'N/A',
-      targetRole: resume.originalFileName ? 'Software Engineer' : 'Not Set',
+      targetRole: fullUser?.profile?.targetRole || 'Software Engineer',
       experienceLevel: analysis.summary?.experienceLevel || 'Entry-level',
       aiConfidence: analysis.summary?.aiConfidence || 85,
       lastUpdated: resume.updatedAt ? new Date(resume.updatedAt).toLocaleDateString() : 'N/A'
