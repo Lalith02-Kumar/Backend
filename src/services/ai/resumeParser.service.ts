@@ -29,7 +29,7 @@ export class ResumeParserService {
         return result.value;
       }
     } catch (error) {
-      logger.warn('Primary text extraction failed, attempting fallback', { error });
+      logger.warn({ error }, 'Primary text extraction failed, attempting fallback');
       // Try pdfParse as fallback
       try {
         const data = await pdfParse(buffer);

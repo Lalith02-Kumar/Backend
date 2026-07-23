@@ -14,12 +14,12 @@ export const globalErrorHandler = (
   res: Response,
   _next: NextFunction,
 ) => {
-  logger.error('Request error', {
+  logger.error({
     error: err.message,
     stack: err.stack,
     path: req.path,
     method: req.method,
-  });
+  }, 'Request error');
 
   if (err instanceof AppError) {
     const response: ApiResponse = {

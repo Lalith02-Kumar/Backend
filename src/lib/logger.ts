@@ -1,14 +1,3 @@
-import winston from 'winston';
-
-const { combine, timestamp, errors, json, colorize, simple } = winston.format;
-
-export const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  format: combine(timestamp(), errors({ stack: true }), json()),
-  transports: [
-    new winston.transports.Console({
-      format:
-        process.env.NODE_ENV === 'development' ? combine(colorize(), simple()) : combine(json()),
-    }),
-  ],
-});
+// Re-export the canonical Pino logger from utils
+// All services, workers, and middleware should import { logger } from this path
+export { logger } from '../utils/logger';

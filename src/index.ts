@@ -1,8 +1,17 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import app from './app';
 import { env } from './config/env';
 import { logger } from './utils/logger';
 import { prisma } from './lib/prisma';
-import { redisClient } from './config/redis';
+import { redis } from './lib/redis';
+import { initQueues } from './queues';
+
+// Initialize BullMQ workers
+initQueues().catch((err) => {
+  logger.error('Failed to initialize queues', err);
+});
 
 const server = app.listen(env.PORT, () => {
   logger.info(`🚀 Server running in ${env.NODE_ENV} mode on port ${env.PORT}`);
@@ -15,8 +24,12 @@ const gracefulShutdown = async (signal: string) => {
     logger.info('HTTP server closed.');
     await prisma.$disconnect();
     logger.info('Database disconnected.');
-    await redisClient.quit();
-    logger.info('Redis disconnected.');
+    try {
+      await redis.quit();
+      logger.info('Redis disconnected.');
+    } catch (e) {
+      // Redis may already be disconnected
+    }
     process.exit(0);
   });
 
