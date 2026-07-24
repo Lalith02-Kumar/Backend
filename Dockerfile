@@ -3,6 +3,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Install native dependencies required by Prisma on Alpine Linux
+RUN apk add --no-cache openssl libc6-compat
+
 # Install dependencies (no secrets needed at build time)
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -22,6 +25,9 @@ RUN npm run build 2>/dev/null || npx tsc
 FROM node:20-alpine AS runner
 
 WORKDIR /app
+
+# Install openssl for Prisma runtime
+RUN apk add --no-cache openssl libc6-compat
 
 # Install only production dependencies
 COPY package*.json ./
