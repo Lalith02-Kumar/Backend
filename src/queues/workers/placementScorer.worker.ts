@@ -16,14 +16,12 @@ export const placementScorerWorker = new Worker(
       targetRole: string;
     };
 
-    logger.info(`Starting placement analysis ${analysisId}`);
-
-    await prisma.placementAnalysis.update({
-      where: { id: analysisId },
-      data: { status: 'PROCESSING' },
-    });
-
     try {
+      await prisma.placementAnalysis.update({
+        where: { id: analysisId },
+        data: { status: 'PROCESSING' },
+      });
+
       await job.updateProgress(5);
 
       // ── Gather all user data ────────────────────────────────────────────────
@@ -237,14 +235,22 @@ export const placementScorerWorker = new Worker(
       );
 
       return { analysisId, score: placementScore.overall, jobMatches: rankedMatches.length };
-    } catch (error) {
-      await prisma.placementAnalysis.update({
-        where: { id: analysisId },
-        data: {
-          status: 'FAILED',
-          errorMessage: error instanceof Error ? error.message : 'Analysis failed',
-        },
-      });
+    } catch (error: any) {
+      if (error?.code === 'P2025') {
+        logger.warn({ analysisId }, 'Placement analysis record not found in database, aborting job.');
+        return { analysisId, skipped: true };
+      }
+      try {
+        await prisma.placementAnalysis.update({
+          where: { id: analysisId },
+          data: {
+            status: 'FAILED',
+            errorMessage: error instanceof Error ? error.message : 'Analysis failed',
+          },
+        });
+      } catch (e) {
+        // Ignore
+      }
       throw error;
     }
   },

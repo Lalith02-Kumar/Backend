@@ -10,10 +10,9 @@ export const githubAnalyzerWorker = new Worker(
     const { profileId, userId, username } = job.data;
     logger.info(`Analyzing GitHub profile: ${username}`);
 
-    await job.updateProgress(10);
-    await prisma.gitHubProfile.update({ where: { id: profileId }, data: { status: 'PROCESSING' } });
-
     try {
+      await prisma.gitHubProfile.update({ where: { id: profileId }, data: { status: 'PROCESSING' } });
+
       const analyzer = new GitHubAnalyzerService();
       const result = await analyzer.analyze(username, (progress) => job.updateProgress(progress));
 
@@ -44,11 +43,19 @@ export const githubAnalyzerWorker = new Worker(
 
       await job.updateProgress(100);
       return { profileId, reposAnalyzed: result.repositories.length };
-    } catch (error) {
-      await prisma.gitHubProfile.update({
-        where: { id: profileId },
-        data: { status: 'FAILED' },
-      });
+    } catch (error: any) {
+      if (error?.code === 'P2025') {
+        logger.warn({ profileId }, 'GitHub profile record not found in database, aborting job.');
+        return { profileId, skipped: true };
+      }
+      try {
+        await prisma.gitHubProfile.update({
+          where: { id: profileId },
+          data: { status: 'FAILED' },
+        });
+      } catch (e) {
+        // Ignore
+      }
       throw error;
     }
   },

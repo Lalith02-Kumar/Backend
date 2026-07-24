@@ -10,9 +10,9 @@ export const codingFetcherWorker = new Worker(
     const { profileId, userId, platform, username } = job.data;
     logger.info(`Fetching ${platform} stats for ${username}`);
 
-    await prisma.codingProfile.update({ where: { id: profileId }, data: { status: 'PROCESSING' } });
-
     try {
+      await prisma.codingProfile.update({ where: { id: profileId }, data: { status: 'PROCESSING' } });
+
       const fetcher = new CodingProfileFetcherService();
       const stats = await fetcher.fetchStats(platform, username);
 
@@ -22,11 +22,19 @@ export const codingFetcherWorker = new Worker(
       });
 
       return { profileId, platform, stats };
-    } catch (error) {
-      await prisma.codingProfile.update({
-        where: { id: profileId },
-        data: { status: 'FAILED' },
-      });
+    } catch (error: any) {
+      if (error?.code === 'P2025') {
+        logger.warn({ profileId }, 'Coding profile record not found in database, aborting job.');
+        return { profileId, skipped: true };
+      }
+      try {
+        await prisma.codingProfile.update({
+          where: { id: profileId },
+          data: { status: 'FAILED' },
+        });
+      } catch (e) {
+        // Ignore
+      }
       throw error;
     }
   },

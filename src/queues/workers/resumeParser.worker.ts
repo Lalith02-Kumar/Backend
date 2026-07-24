@@ -13,14 +13,12 @@ export const resumeParserWorker = new Worker(
     const { resumeId, userId, cloudinaryUrl, localFilePath } = job.data;
     logger.info(`Parsing resume ${resumeId}`);
 
-    await job.updateProgress(10);
-
-    await prisma.resume.update({
-      where: { id: resumeId },
-      data: { status: 'PROCESSING' },
-    });
-
     try {
+      await prisma.resume.update({
+        where: { id: resumeId },
+        data: { status: 'PROCESSING' },
+      });
+
       // Download file if local path not available
       let fileBuffer: Buffer;
       if (localFilePath && fs.existsSync(localFilePath)) {
@@ -89,14 +87,22 @@ export const resumeParserWorker = new Worker(
       logger.info(`Resume ${resumeId} parsed successfully`);
 
       return { resumeId, skillsExtracted: parsedData.skills.length };
-    } catch (error) {
-      await prisma.resume.update({
-        where: { id: resumeId },
-        data: {
-          status: 'FAILED',
-          errorMessage: error instanceof Error ? error.message : 'Unknown error',
-        },
-      });
+    } catch (error: any) {
+      if (error?.code === 'P2025') {
+        logger.warn({ resumeId }, 'Resume record not found in database, aborting parse job.');
+        return { resumeId, skipped: true };
+      }
+      try {
+        await prisma.resume.update({
+          where: { id: resumeId },
+          data: {
+            status: 'FAILED',
+            errorMessage: error instanceof Error ? error.message : 'Unknown error',
+          },
+        });
+      } catch (e) {
+        // Ignore secondary error if record missing
+      }
       throw error;
     }
   },
