@@ -7,10 +7,15 @@ import { logger } from './utils/logger';
 import { prisma } from './lib/prisma';
 import { redis } from './lib/redis';
 import { initQueues } from './queues';
+import { runGeminiDiagnostic } from './lib/gemini';
 
-// Initialize BullMQ workers
+// Initialize BullMQ workers & Gemini AI Diagnostic
 initQueues().catch((err) => {
   logger.error('Failed to initialize queues', err);
+});
+
+runGeminiDiagnostic().catch((err) => {
+  logger.warn({ err: err?.message || err }, 'Gemini startup diagnostic completed with warning');
 });
 
 const server = app.listen(env.PORT, () => {
