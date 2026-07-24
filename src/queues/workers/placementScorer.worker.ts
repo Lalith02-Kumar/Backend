@@ -7,9 +7,7 @@ import { GapAnalyzerService } from '../../services/ai/gapAnalyzer.service';
 import { RoadmapGeneratorService } from '../../services/ai/roadmapGenerator.service';
 import { JobRecommenderService } from '../../services/ai/jobRecommender.service';
 
-export const placementScorerWorker = new Worker(
-  'placement-scorer',
-  async (job) => {
+export const placementScorerHandler = async (job: any) => {
     const { analysisId, userId, targetRole } = job.data as {
       analysisId: string;
       userId: string;
@@ -247,7 +245,11 @@ export const placementScorerWorker = new Worker(
       });
       throw error;
     }
-  },
+};
+
+export const placementScorerWorker = new Worker(
+  'placement-scorer',
+  placementScorerHandler,
   { 
     connection: redis, 
     concurrency: 2,

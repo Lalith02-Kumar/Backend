@@ -7,9 +7,7 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 
-export const resumeParserWorker = new Worker(
-  'resume-parser',
-  async (job) => {
+export const resumeParserHandler = async (job: any) => {
     const { resumeId, userId, cloudinaryUrl, localFilePath } = job.data;
     logger.info(`Parsing resume ${resumeId}`);
 
@@ -99,7 +97,11 @@ export const resumeParserWorker = new Worker(
       });
       throw error;
     }
-  },
+};
+
+export const resumeParserWorker = new Worker(
+  'resume-parser',
+  resumeParserHandler,
   {
     connection: redis,
     concurrency: 3,

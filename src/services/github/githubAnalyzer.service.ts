@@ -6,9 +6,9 @@ const GITHUB_API = 'https://api.github.com';
 
 export class GitHubAnalyzerService {
   private getHeaders() {
-    return process.env.GITHUB_TOKEN
-      ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
-      : {};
+    const token = process.env.GITHUB_TOKEN;
+    if (!token) return {};
+    return { Authorization: token.startsWith('github_pat_') || token.startsWith('ghu_') ? `Bearer ${token}` : `token ${token}` };
   }
 
   private async fetchWithRetry(url: string, config: any = {}) {

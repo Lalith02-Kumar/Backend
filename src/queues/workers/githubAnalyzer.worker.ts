@@ -4,9 +4,7 @@ import { prisma } from '../../lib/prisma';
 import { logger } from '../../lib/logger';
 import { GitHubAnalyzerService } from '../../services/github/githubAnalyzer.service';
 
-export const githubAnalyzerWorker = new Worker(
-  'github-analyzer',
-  async (job) => {
+export const githubAnalyzerHandler = async (job: any) => {
     const { profileId, userId, username } = job.data;
     logger.info(`Analyzing GitHub profile: ${username}`);
 
@@ -15,7 +13,7 @@ export const githubAnalyzerWorker = new Worker(
 
     try {
       const analyzer = new GitHubAnalyzerService();
-      const result = await analyzer.analyze(username, (progress) => job.updateProgress(progress));
+      const result = await analyzer.analyze(username, (progress: number) => job.updateProgress(progress));
 
       await prisma.gitHubProfile.update({
         where: { id: profileId },
@@ -51,7 +49,11 @@ export const githubAnalyzerWorker = new Worker(
       });
       throw error;
     }
-  },
+};
+
+export const githubAnalyzerWorker = new Worker(
+  'github-analyzer',
+  githubAnalyzerHandler,
   { 
     connection: redis, 
     concurrency: 5,

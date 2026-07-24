@@ -4,9 +4,7 @@ import { prisma } from '../../lib/prisma';
 import { logger } from '../../lib/logger';
 import { CodingProfileFetcherService } from '../../services/coding/codingFetcher.service';
 
-export const codingFetcherWorker = new Worker(
-  'coding-fetcher',
-  async (job) => {
+export const codingFetcherHandler = async (job: any) => {
     const { profileId, userId, platform, username } = job.data;
     logger.info(`Fetching ${platform} stats for ${username}`);
 
@@ -29,7 +27,11 @@ export const codingFetcherWorker = new Worker(
       });
       throw error;
     }
-  },
+};
+
+export const codingFetcherWorker = new Worker(
+  'coding-fetcher',
+  codingFetcherHandler,
   { 
     connection: redis, 
     concurrency: 10,
