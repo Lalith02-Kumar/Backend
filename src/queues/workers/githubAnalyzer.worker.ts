@@ -52,7 +52,12 @@ export const githubAnalyzerWorker = new Worker(
       throw error;
     }
   },
-  { connection: redis, concurrency: 5 },
+  { 
+    connection: redis, 
+    concurrency: 5,
+    stalledInterval: 300000, // 5 minutes
+    drainDelay: 60,          // 60 seconds
+  },
 );
 
 githubAnalyzerWorker.on('completed', (job) => logger.info(`GitHub analyzer job ${job.id} completed`));

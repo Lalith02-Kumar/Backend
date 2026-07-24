@@ -9,10 +9,15 @@ import { placementScorerWorker } from './workers/placementScorer.worker';
 const connection = redis;
 
 // ─── Queue Definitions ────────────────────────────────────────────────────────
-export const resumeParserQueue = new Queue('resume-parser', { connection });
-export const githubAnalyzerQueue = new Queue('github-analyzer', { connection });
-export const codingFetcherQueue = new Queue('coding-fetcher', { connection });
-export const placementScorerQueue = new Queue('placement-scorer', { connection });
+const defaultJobOptions = {
+  removeOnComplete: true,
+  removeOnFail: 100, // Keep last 100 failed jobs for diagnostics
+};
+
+export const resumeParserQueue = new Queue('resume-parser', { connection, defaultJobOptions });
+export const githubAnalyzerQueue = new Queue('github-analyzer', { connection, defaultJobOptions });
+export const codingFetcherQueue = new Queue('coding-fetcher', { connection, defaultJobOptions });
+export const placementScorerQueue = new Queue('placement-scorer', { connection, defaultJobOptions });
 
 export async function initQueues() {
   // Start workers

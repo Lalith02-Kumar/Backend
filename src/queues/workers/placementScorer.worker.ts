@@ -248,7 +248,12 @@ export const placementScorerWorker = new Worker(
       throw error;
     }
   },
-  { connection: redis, concurrency: 2 },
+  { 
+    connection: redis, 
+    concurrency: 2,
+    stalledInterval: 300000, // 5 minutes
+    drainDelay: 60,          // 60 seconds
+  },
 );
 
 placementScorerWorker.on('completed', (job) =>

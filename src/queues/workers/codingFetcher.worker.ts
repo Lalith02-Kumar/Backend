@@ -30,7 +30,12 @@ export const codingFetcherWorker = new Worker(
       throw error;
     }
   },
-  { connection: redis, concurrency: 10 },
+  { 
+    connection: redis, 
+    concurrency: 10,
+    stalledInterval: 300000, // 5 minutes
+    drainDelay: 60,          // 60 seconds
+  },
 );
 
 codingFetcherWorker.on('completed', (job) => logger.info(`Coding fetcher job ${job.id} completed`));

@@ -103,6 +103,8 @@ export const resumeParserWorker = new Worker(
   {
     connection: redis,
     concurrency: 3,
+    stalledInterval: 300000, // 5 minutes
+    drainDelay: 60,          // 60 seconds
   },
 );
 
