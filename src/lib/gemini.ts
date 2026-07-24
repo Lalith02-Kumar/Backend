@@ -2,10 +2,20 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { logger } from './logger';
 
 export let DISCOVERED_MODELS: string[] = [
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+  'gemini-2.0-flash',
   'gemini-1.5-flash',
   'gemini-1.5-pro',
-  'gemini-2.0-flash',
+  'gemini-3.5-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.6-flash',
+  'gemini-3.1-flash-lite',
+  'gemini-2.0-flash-lite',
+  'gemini-2.5-flash-lite',
   'gemini-1.5-flash-latest',
+  'gemini-1.5-pro-latest',
+  'gemini-2.5-flash-latest',
 ];
 
 interface KeyClient {
@@ -68,7 +78,7 @@ function getKeyClients(): KeyClient[] {
   if (keyClients.length === 0) {
     const keysString = process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '';
     const keys = keysString.split(',').map(k => k.trim()).filter(k => k.length > 0);
-    
+
     if (keys.length === 0) {
       logger.warn('No GEMINI API keys found in environment variables. API calls will fail.');
       keys.push('INVALID_KEY');
@@ -79,7 +89,7 @@ function getKeyClients(): KeyClient[] {
       rawKey: key,
       maskedKey: key.length > 4 ? `****${key.slice(-4)}` : '****',
     }));
-    
+
     logger.info(`Initialized Gemini AI with ${keyClients.length} load-balanced API key(s).`);
   }
   return keyClients;
@@ -107,12 +117,16 @@ export async function generateJson<T>(
   const startTime = Date.now();
   let lastError: any = null;
 
+  const clients = getKeyClients();
+  // Ensure we attempt to try all discovered models and API keys if needed
+  const totalAttempts = Math.max(maxRetries + 1, DISCOVERED_MODELS.length * clients.length);
+
   // We iterate through combinations of candidate models and load-balanced API keys
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+  for (let attempt = 0; attempt < totalAttempts; attempt++) {
     const keyClient = getNextKeyClient(attempt);
     // Cycle through stable discovered models
     const modelName = DISCOVERED_MODELS[attempt % DISCOVERED_MODELS.length];
-    
+
     const model = keyClient.client.getGenerativeModel({
       model: modelName,
       generationConfig: {
@@ -159,17 +173,26 @@ export async function generateJson<T>(
         }
       }
 
+      // Check if error is non-retriable (e.g. invalid auth key, or bad request/blocked input)
+      const isNonRetriable = (errorMessage.includes('400') && !errorMessage.includes('schema') && !errorMessage.includes('mimeType')) || 
+                             ((errorMessage.includes('401') || errorMessage.includes('403') || errorMessage.includes('API key not valid')) && clients.length <= 1);
+
       logger.warn({
         model: modelName,
         apiKey: keyClient.maskedKey,
         attempt: attempt + 1,
-        maxRetries: maxRetries + 1,
+        maxRetries: totalAttempts,
         durationMs,
         is404,
+        isNonRetriable,
         err: errorMessage,
-      }, `Gemini AI Request Failed (${is404 ? 'Model 404 Not Found — Purged' : 'API Error'}). Fallback rotating model & API key...`);
+      }, `Gemini AI Request Failed (${is404 ? 'Model 404 Not Found — Purged' : isNonRetriable ? 'Non-Retriable Error' : 'API Error'}). Fallback rotating model & API key...`);
 
-      if (attempt < maxRetries) {
+      if (isNonRetriable) {
+        throw error;
+      }
+
+      if (attempt < totalAttempts - 1) {
         // Backoff delay before next attempt
         await new Promise((resolve) => setTimeout(resolve, Math.min((attempt + 1) * 800, 2500)));
       }
