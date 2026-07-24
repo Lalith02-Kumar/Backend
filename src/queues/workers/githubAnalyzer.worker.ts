@@ -51,16 +51,23 @@ export const githubAnalyzerHandler = async (job: any) => {
     }
 };
 
-export const githubAnalyzerWorker = new Worker(
-  'github-analyzer',
-  githubAnalyzerHandler,
-  { 
-    connection: redis, 
-    concurrency: 5,
-    stalledInterval: 300000, // 5 minutes
-    drainDelay: 60,          // 60 seconds
-  },
-);
+let githubAnalyzerWorker: Worker | null = null;
 
-githubAnalyzerWorker.on('completed', (job) => logger.info(`GitHub analyzer job ${job.id} completed`));
-githubAnalyzerWorker.on('failed', (job, err) => logger.error(`GitHub analyzer job ${job?.id} failed`, err));
+export function startGitHubAnalyzerWorker() {
+  if (!githubAnalyzerWorker) {
+    githubAnalyzerWorker = new Worker(
+      'github-analyzer',
+      githubAnalyzerHandler,
+      { 
+        connection: redis, 
+        concurrency: 5,
+        stalledInterval: 300000, // 5 minutes
+        drainDelay: 60,          // 60 seconds
+      },
+    );
+
+    githubAnalyzerWorker.on('completed', (job) => logger.info(`GitHub analyzer job ${job.id} completed`));
+    githubAnalyzerWorker.on('failed', (job, err) => logger.error(`GitHub analyzer job ${job?.id} failed`, err));
+  }
+  return githubAnalyzerWorker;
+}

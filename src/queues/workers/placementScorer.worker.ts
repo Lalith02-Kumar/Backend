@@ -247,20 +247,27 @@ export const placementScorerHandler = async (job: any) => {
     }
 };
 
-export const placementScorerWorker = new Worker(
-  'placement-scorer',
-  placementScorerHandler,
-  { 
-    connection: redis, 
-    concurrency: 2,
-    stalledInterval: 300000, // 5 minutes
-    drainDelay: 60,          // 60 seconds
-  },
-);
+let placementScorerWorker: Worker | null = null;
 
-placementScorerWorker.on('completed', (job) =>
-  logger.info(`Scorer job ${job.id} completed`),
-);
-placementScorerWorker.on('failed', (job, err) =>
-  logger.error(`Scorer job ${job?.id} failed`, err),
-);
+export function startPlacementScorerWorker() {
+  if (!placementScorerWorker) {
+    placementScorerWorker = new Worker(
+      'placement-scorer',
+      placementScorerHandler,
+      { 
+        connection: redis, 
+        concurrency: 2,
+        stalledInterval: 300000, // 5 minutes
+        drainDelay: 60,          // 60 seconds
+      },
+    );
+
+    placementScorerWorker.on('completed', (job) =>
+      logger.info(`Scorer job ${job.id} completed`),
+    );
+    placementScorerWorker.on('failed', (job, err) =>
+      logger.error(`Scorer job ${job?.id} failed`, err),
+    );
+  }
+  return placementScorerWorker;
+}

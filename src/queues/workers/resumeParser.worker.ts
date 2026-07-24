@@ -99,16 +99,23 @@ export const resumeParserHandler = async (job: any) => {
     }
 };
 
-export const resumeParserWorker = new Worker(
-  'resume-parser',
-  resumeParserHandler,
-  {
-    connection: redis,
-    concurrency: 3,
-    stalledInterval: 300000, // 5 minutes
-    drainDelay: 60,          // 60 seconds
-  },
-);
+let resumeParserWorker: Worker | null = null;
 
-resumeParserWorker.on('completed', (job) => logger.info(`Resume parser job ${job.id} completed`));
-resumeParserWorker.on('failed', (job, err) => logger.error(`Resume parser job ${job?.id} failed`, err));
+export function startResumeParserWorker() {
+  if (!resumeParserWorker) {
+    resumeParserWorker = new Worker(
+      'resume-parser',
+      resumeParserHandler,
+      {
+        connection: redis,
+        concurrency: 3,
+        stalledInterval: 300000, // 5 minutes
+        drainDelay: 60,          // 60 seconds
+      },
+    );
+
+    resumeParserWorker.on('completed', (job) => logger.info(`Resume parser job ${job.id} completed`));
+    resumeParserWorker.on('failed', (job, err) => logger.error(`Resume parser job ${job?.id} failed`, err));
+  }
+  return resumeParserWorker;
+}

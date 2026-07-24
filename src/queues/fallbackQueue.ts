@@ -1,3 +1,4 @@
+import { Queue } from 'bullmq';
 import { logger } from '../lib/logger';
 
 const jobsStore = new Map<string, {
@@ -97,3 +98,82 @@ export class FallbackQueue {
     // Event listener registration (noop for fallback)
   }
 }
+
+export class DynamicQueue {
+  name: string;
+  private realQueue: Queue | null = null;
+  private fallbackQueue: FallbackQueue;
+  private connection: any;
+  private defaultJobOptions: any;
+
+  // Global static flag that can be set by index.ts or triggered at runtime
+  static useFallback = false;
+
+  constructor(name: string, handler: any, connection: any, defaultJobOptions: any) {
+    this.name = name;
+    this.fallbackQueue = new FallbackQueue(name, handler);
+    this.connection = connection;
+    this.defaultJobOptions = defaultJobOptions;
+  }
+
+  private getQueue() {
+    if (DynamicQueue.useFallback) {
+      return this.fallbackQueue;
+    }
+    if (!this.realQueue) {
+      try {
+        this.realQueue = new Queue(this.name, { connection: this.connection, defaultJobOptions: this.defaultJobOptions });
+      } catch (err) {
+        logger.error(`Failed to initialize real queue ${this.name}, switching globally to fallback`, err);
+        DynamicQueue.useFallback = true;
+        return this.fallbackQueue;
+      }
+    }
+    return this.realQueue;
+  }
+
+  async add(name: string, data: any, opts?: any) {
+    const q = this.getQueue();
+    try {
+      return await q.add(name, data, opts);
+    } catch (error: any) {
+      if (!DynamicQueue.useFallback && (error.message?.includes('limit exceeded') || error.message?.includes('max requests') || error.message?.includes('closed') || error.message?.includes('connection'))) {
+        logger.warn(`[DynamicQueue] Redis issue detected. Switching globally to in-memory fallback queue.`);
+        DynamicQueue.useFallback = true;
+        return await this.fallbackQueue.add(name, data, opts);
+      }
+      throw error;
+    }
+  }
+
+  async getJob(jobId: string) {
+    if (DynamicQueue.useFallback || jobId.startsWith('mock-')) {
+      return await this.fallbackQueue.getJob(jobId);
+    }
+    const q = this.getQueue();
+    try {
+      return await q.getJob(jobId);
+    } catch (error: any) {
+      if (!DynamicQueue.useFallback && (error.message?.includes('limit exceeded') || error.message?.includes('max requests') || error.message?.includes('closed') || error.message?.includes('connection'))) {
+        logger.warn(`[DynamicQueue] Redis issue detected. Switching globally to in-memory fallback queue.`);
+        DynamicQueue.useFallback = true;
+        return await this.fallbackQueue.getJob(jobId);
+      }
+      throw error;
+    }
+  }
+
+  on(event: any, callback: any) {
+    if (!DynamicQueue.useFallback) {
+      try {
+        const q = this.getQueue() as any;
+        if (q && typeof q.on === 'function') {
+          q.on(event, callback);
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+  }
+}
+

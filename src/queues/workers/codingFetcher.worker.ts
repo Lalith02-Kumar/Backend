@@ -29,16 +29,23 @@ export const codingFetcherHandler = async (job: any) => {
     }
 };
 
-export const codingFetcherWorker = new Worker(
-  'coding-fetcher',
-  codingFetcherHandler,
-  { 
-    connection: redis, 
-    concurrency: 10,
-    stalledInterval: 300000, // 5 minutes
-    drainDelay: 60,          // 60 seconds
-  },
-);
+let codingFetcherWorker: Worker | null = null;
 
-codingFetcherWorker.on('completed', (job) => logger.info(`Coding fetcher job ${job.id} completed`));
-codingFetcherWorker.on('failed', (job, err) => logger.error(`Coding fetcher job ${job?.id} failed`, err));
+export function startCodingFetcherWorker() {
+  if (!codingFetcherWorker) {
+    codingFetcherWorker = new Worker(
+      'coding-fetcher',
+      codingFetcherHandler,
+      { 
+        connection: redis, 
+        concurrency: 10,
+        stalledInterval: 300000, // 5 minutes
+        drainDelay: 60,          // 60 seconds
+      },
+    );
+
+    codingFetcherWorker.on('completed', (job) => logger.info(`Coding fetcher job ${job.id} completed`));
+    codingFetcherWorker.on('failed', (job, err) => logger.error(`Coding fetcher job ${job?.id} failed`, err));
+  }
+  return codingFetcherWorker;
+}

@@ -1,11 +1,10 @@
-import { Queue } from 'bullmq';
+import { DynamicQueue } from './fallbackQueue';
+import { startResumeParserWorker, resumeParserHandler } from './workers/resumeParser.worker';
+import { startGitHubAnalyzerWorker, githubAnalyzerHandler } from './workers/githubAnalyzer.worker';
+import { startCodingFetcherWorker, codingFetcherHandler } from './workers/codingFetcher.worker';
+import { startPlacementScorerWorker, placementScorerHandler } from './workers/placementScorer.worker';
 import { redis } from '../lib/redis';
 import { logger } from '../lib/logger';
-import { FallbackQueue } from './fallbackQueue';
-import { resumeParserWorker, resumeParserHandler } from './workers/resumeParser.worker';
-import { githubAnalyzerWorker, githubAnalyzerHandler } from './workers/githubAnalyzer.worker';
-import { codingFetcherWorker, codingFetcherHandler } from './workers/codingFetcher.worker';
-import { placementScorerWorker, placementScorerHandler } from './workers/placementScorer.worker';
 
 const connection = redis;
 
@@ -15,43 +14,39 @@ const defaultJobOptions = {
   removeOnFail: 100, // Keep last 100 failed jobs for diagnostics
 };
 
-// Use in-memory queue fallback in development or when explicitly requested
-const useFallback = process.env.BYPASS_QUEUE === 'true' || process.env.NODE_ENV === 'development' || !process.env.REDIS_URL;
-
-export const resumeParserQueue = useFallback
-  ? new FallbackQueue('resume-parser', resumeParserHandler) as any
-  : new Queue('resume-parser', { connection, defaultJobOptions });
-
-export const githubAnalyzerQueue = useFallback
-  ? new FallbackQueue('github-analyzer', githubAnalyzerHandler) as any
-  : new Queue('github-analyzer', { connection, defaultJobOptions });
-
-export const codingFetcherQueue = useFallback
-  ? new FallbackQueue('coding-fetcher', codingFetcherHandler) as any
-  : new Queue('coding-fetcher', { connection, defaultJobOptions });
-
-export const placementScorerQueue = useFallback
-  ? new FallbackQueue('placement-scorer', placementScorerHandler) as any
-  : new Queue('placement-scorer', { connection, defaultJobOptions });
+export const resumeParserQueue = new DynamicQueue('resume-parser', resumeParserHandler, connection, defaultJobOptions);
+export const githubAnalyzerQueue = new DynamicQueue('github-analyzer', githubAnalyzerHandler, connection, defaultJobOptions);
+export const codingFetcherQueue = new DynamicQueue('coding-fetcher', codingFetcherHandler, connection, defaultJobOptions);
+export const placementScorerQueue = new DynamicQueue('placement-scorer', placementScorerHandler, connection, defaultJobOptions);
 
 export async function initQueues() {
-  if (useFallback) {
-    logger.info('⚠️ Using in-memory fallback queues (bypassing BullMQ/Redis)');
+  // Test Redis connection at startup
+  try {
+    await Promise.race([
+      redis.ping(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Redis connection timeout')), 2500))
+    ]);
+    logger.info('✅ Redis ping check passed');
+  } catch (err: any) {
+    logger.warn({ err: err.message }, '⚠️ Redis connection or rate limit check failed. Switching globally to in-memory fallback queues.');
+    DynamicQueue.useFallback = true;
+  }
+
+  if (DynamicQueue.useFallback) {
+    logger.info('⚠️ In-memory fallback queues enabled. Workers will not connect to Redis.');
     return;
   }
 
-  // Start workers
-  resumeParserWorker;
-  githubAnalyzerWorker;
-  codingFetcherWorker;
-  placementScorerWorker;
+  try {
+    // Start workers
+    startResumeParserWorker();
+    startGitHubAnalyzerWorker();
+    startCodingFetcherWorker();
+    startPlacementScorerWorker();
 
-  logger.info('✅ All BullMQ workers started');
-
-  // Queue event logging
-  [resumeParserQueue, githubAnalyzerQueue, codingFetcherQueue, placementScorerQueue].forEach(
-    (queue) => {
-      queue.on('error', (err: any) => logger.error(`Queue ${queue.name} error`, err));
-    },
-  );
+    logger.info('✅ All BullMQ workers started');
+  } catch (err) {
+    logger.error('Failed to start BullMQ workers, reverting to fallback queues', err);
+    DynamicQueue.useFallback = true;
+  }
 }
