@@ -2,7 +2,7 @@ import Redis from 'ioredis';
 import { logger } from '../utils/logger';
 
 const createRedisClient = (): Redis => {
-  const url = process.env.REDIS_URL || 'redis://localhost:6379';
+  const url = process.env.REDIS_URL || 'redis://default:WPfXajl1bdEu6QN7K2p6ELmRTttGSa2s@liquid-iced-branch-55187.db.redis.io:15593';
 
   try {
     const parsedUrl = new URL(url);
