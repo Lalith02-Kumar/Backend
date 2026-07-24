@@ -17,6 +17,8 @@ export const placementScorerWorker = new Worker(
     };
 
     try {
+      const pipelineStart = Date.now();
+
       await prisma.placementAnalysis.update({
         where: { id: analysisId },
         data: { status: 'PROCESSING' },
@@ -24,24 +26,31 @@ export const placementScorerWorker = new Worker(
 
       await job.updateProgress(5);
 
-      // ── Gather all user data ────────────────────────────────────────────────
-      const [profile, resume, github, codingProfiles] = await Promise.all([
+      // ── Gather all user data & job descriptions concurrently ────────────────
+      const dbStart = Date.now();
+      const [profile, resume, github, codingProfiles, jobDescriptions, allActiveJDs] = await Promise.all([
         prisma.userProfile.findUnique({ where: { userId } }),
         prisma.resume.findUnique({ where: { userId }, include: { skills: true } }),
         prisma.gitHubProfile.findUnique({ where: { userId } }),
         prisma.codingProfile.findMany({ where: { userId } }),
+        prisma.jobDescription.findMany({
+          where: { targetRole: targetRole as any, isActive: true },
+          include: { requiredSkills: true },
+          take: 30,
+        }),
+        prisma.jobDescription.findMany({
+          where: { isActive: true },
+          include: { requiredSkills: true },
+        }),
       ]);
 
-      // ── Fetch JDs for the target role (used by all downstream services) ────
-      const jobDescriptions = await prisma.jobDescription.findMany({
-        where: { targetRole: targetRole as any, isActive: true },
-        include: { requiredSkills: true },
-        take: 30,
-      });
+      const dbDurationMs = Date.now() - dbStart;
+      logger.info({ durationMs: dbDurationMs }, '⚡ [PERF] Concurrent Database Fetch Completed');
 
       await job.updateProgress(15);
 
       // ── 1. Placement Score ─────────────────────────────────────────────────
+      const scoreStart = Date.now();
       const scorer = new PlacementScorerService();
       const placementScore = scorer.calculate({
         profile: profile!,
@@ -50,10 +59,13 @@ export const placementScorerWorker = new Worker(
         codingProfiles,
         jobDescriptions,
       });
+      const scoreDurationMs = Date.now() - scoreStart;
+      logger.info({ durationMs: scoreDurationMs }, '⚡ [PERF] Placement Score Math Calculation Completed');
 
       await job.updateProgress(35);
 
       // ── 2. Skill Gap Analysis ──────────────────────────────────────────────
+      const gapStart = Date.now();
       const gapAnalyzer = new GapAnalyzerService();
       const skillGaps = await gapAnalyzer.analyze({
         resumeSkills: resume?.skills || [],
@@ -62,10 +74,13 @@ export const placementScorerWorker = new Worker(
         jobDescriptions: jobDescriptions as any,
         targetRole,
       });
+      const gapDurationMs = Date.now() - gapStart;
+      logger.info({ durationMs: gapDurationMs }, '⚡ [PERF] Skill Gap Analysis Completed');
 
       await job.updateProgress(55);
 
       // ── 3. Learning Roadmap ────────────────────────────────────────────────
+      const roadmapStart = Date.now();
       const roadmapGenerator = new RoadmapGeneratorService();
       const roadmap = await roadmapGenerator.generate({
         skillGaps,
@@ -73,10 +88,13 @@ export const placementScorerWorker = new Worker(
         profile: profile!,
         placementScore,
       });
+      const roadmapDurationMs = Date.now() - roadmapStart;
+      logger.info({ durationMs: roadmapDurationMs }, '⚡ [PERF] Learning Roadmap Generation Completed');
 
       await job.updateProgress(70);
 
-      // ── 4. Recommendations ────────────────────────────────────────────────
+      // ── 4. Recommendations & Matching ─────────────────────────────────────
+      const matchStart = Date.now();
       const recommendations = scorer.generateRecommendations({
         placementScore,
         skillGaps,
@@ -85,7 +103,6 @@ export const placementScorerWorker = new Worker(
         codingProfiles,
       });
 
-      // ── 5. Company matching ───────────────────────────────────────────────
       const matchedCompanies = scorer.matchCompanies({
         placementScore,
         resumeSkills: resume?.skills || [],
@@ -95,13 +112,7 @@ export const placementScorerWorker = new Worker(
 
       await job.updateProgress(80);
 
-      // ── 6. Job Recommendations ────────────────────────────────────────────
-      // Rank ALL active JDs (not just target role) for a broader view
-      const allActiveJDs = await prisma.jobDescription.findMany({
-        where: { isActive: true },
-        include: { requiredSkills: true },
-      });
-
+      // ── 5. Job Recommendations ────────────────────────────────────────────
       const recommender = new JobRecommenderService();
       const resumeSkillNames = (resume?.skills || []).map((s: { name: string }) =>
         s.name.toLowerCase(),
@@ -117,6 +128,18 @@ export const placementScorerWorker = new Worker(
         platform: p.platform,
         stats: typeof p.stats === 'string' ? JSON.parse(p.stats) : p.stats,
       }));
+      const matchDurationMs = Date.now() - matchStart;
+      logger.info({ durationMs: matchDurationMs }, '⚡ [PERF] Recommendations & Job Matching Completed');
+
+      const totalPipelineDurationMs = Date.now() - pipelineStart;
+      logger.info({
+        dbDurationMs,
+        scoreDurationMs,
+        gapDurationMs,
+        roadmapDurationMs,
+        matchDurationMs,
+        totalPipelineDurationMs,
+      }, '🚀 [PERF SUMMARY] Full Placement Analysis Pipeline Completed');
 
       const rankedMatches = await recommender.rankJobs({
         resumeSkills: resumeSkillNames,
