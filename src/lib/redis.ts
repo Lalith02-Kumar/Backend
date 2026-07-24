@@ -2,21 +2,7 @@ import Redis from 'ioredis';
 import { logger } from '../utils/logger';
 
 const createRedisClient = (): Redis => {
-  const url = process.env.REDIS_URL || 'redis://default:WPfXajl1bdEu6QN7K2p6ELmRTttGSa2s@liquid-iced-branch-55187.db.redis.io:15593';
-
-  try {
-    const parsedUrl = new URL(url);
-    const maskedUrl = `${parsedUrl.protocol}//${parsedUrl.username ? parsedUrl.username + ':****@' : ''}${parsedUrl.hostname}:${parsedUrl.port}`;
-    logger.info({
-      REDIS_URL: maskedUrl,
-      host: parsedUrl.hostname,
-      port: parsedUrl.port || '6379',
-      protocol: parsedUrl.protocol.replace(':', ''),
-      NODE_ENV: process.env.NODE_ENV || 'development',
-    }, '🔌 Initializing Redis Client');
-  } catch (e) {
-    logger.warn('Failed to parse REDIS_URL string for startup debug logging');
-  }
+  const url = process.env.REDIS_URL || 'redis://localhost:6379';
   
   const client = new Redis(url, {
     maxRetriesPerRequest: null,
@@ -30,18 +16,7 @@ const createRedisClient = (): Redis => {
     },
   });
 
-  client.on('connect', async () => {
-    logger.info('✅ Redis connected');
-    try {
-      const ping = await client.ping();
-      const clientId = await client.client('ID');
-      const dbSize = await client.dbsize();
-      logger.info({ ping, clientId, dbSize }, '📊 Active Redis Connection Verified');
-    } catch (err: any) {
-      logger.error({ err: err.message }, '❌ Redis post-connect verification failed');
-    }
-  });
-
+  client.on('connect', () => logger.info('✅ Redis connected'));
   client.on('error', (err) => logger.error({ err: err.message }, 'Redis error'));
 
   return client;

@@ -27,7 +27,7 @@ export function getGeminiModel() {
   currentKeyIndex = (currentKeyIndex + 1) % genAIClients.length;
 
   return client.getGenerativeModel({
-    model: 'gemini-3.6-flash',
+    model: 'gemini-3.5-flash',
     generationConfig: {
       responseMimeType: 'application/json',
       temperature: 0,

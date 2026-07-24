@@ -4,7 +4,9 @@ import { prisma } from '../../lib/prisma';
 import { logger } from '../../lib/logger';
 import { CodingProfileFetcherService } from '../../services/coding/codingFetcher.service';
 
-export const codingFetcherHandler = async (job: any) => {
+export const codingFetcherWorker = new Worker(
+  'coding-fetcher',
+  async (job) => {
     const { profileId, userId, platform, username } = job.data;
     logger.info(`Fetching ${platform} stats for ${username}`);
 
@@ -27,25 +29,9 @@ export const codingFetcherHandler = async (job: any) => {
       });
       throw error;
     }
-};
+  },
+  { connection: redis, concurrency: 10 },
+);
 
-let codingFetcherWorker: Worker | null = null;
-
-export function startCodingFetcherWorker() {
-  if (!codingFetcherWorker) {
-    codingFetcherWorker = new Worker(
-      'coding-fetcher',
-      codingFetcherHandler,
-      { 
-        connection: redis, 
-        concurrency: 10,
-        stalledInterval: 300000, // 5 minutes
-        drainDelay: 60,          // 60 seconds
-      },
-    );
-
-    codingFetcherWorker.on('completed', (job) => logger.info(`Coding fetcher job ${job.id} completed`));
-    codingFetcherWorker.on('failed', (job, err) => logger.error(`Coding fetcher job ${job?.id} failed`, err));
-  }
-  return codingFetcherWorker;
-}
+codingFetcherWorker.on('completed', (job) => logger.info(`Coding fetcher job ${job.id} completed`));
+codingFetcherWorker.on('failed', (job, err) => logger.error(`Coding fetcher job ${job?.id} failed`, err));

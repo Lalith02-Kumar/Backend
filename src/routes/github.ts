@@ -83,10 +83,11 @@ router.post('/connect', authenticate, asyncHandler(async (req: AuthRequest, res:
 
   try {
     const axios = require('axios');
-    const headers = process.env.GITHUB_TOKEN
-      ? { Authorization: `token ${process.env.GITHUB_TOKEN}` }
-      : {};
-    await axios.get(`https://api.github.com/users/${username}`, { headers });
+    await axios.get(`https://api.github.com/users/${username}`, {
+      headers: {
+        Authorization: `token ${process.env.GITHUB_TOKEN}`
+      }
+    });
   } catch (error) {
     throw new AppError('GitHub username not found or invalid', 400, 'INVALID_USERNAME');
   }

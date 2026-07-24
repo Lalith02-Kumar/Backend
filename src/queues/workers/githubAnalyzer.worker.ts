@@ -4,7 +4,9 @@ import { prisma } from '../../lib/prisma';
 import { logger } from '../../lib/logger';
 import { GitHubAnalyzerService } from '../../services/github/githubAnalyzer.service';
 
-export const githubAnalyzerHandler = async (job: any) => {
+export const githubAnalyzerWorker = new Worker(
+  'github-analyzer',
+  async (job) => {
     const { profileId, userId, username } = job.data;
     logger.info(`Analyzing GitHub profile: ${username}`);
 
@@ -13,7 +15,7 @@ export const githubAnalyzerHandler = async (job: any) => {
 
     try {
       const analyzer = new GitHubAnalyzerService();
-      const result = await analyzer.analyze(username, (progress: number) => job.updateProgress(progress));
+      const result = await analyzer.analyze(username, (progress) => job.updateProgress(progress));
 
       await prisma.gitHubProfile.update({
         where: { id: profileId },
@@ -49,25 +51,9 @@ export const githubAnalyzerHandler = async (job: any) => {
       });
       throw error;
     }
-};
+  },
+  { connection: redis, concurrency: 5 },
+);
 
-let githubAnalyzerWorker: Worker | null = null;
-
-export function startGitHubAnalyzerWorker() {
-  if (!githubAnalyzerWorker) {
-    githubAnalyzerWorker = new Worker(
-      'github-analyzer',
-      githubAnalyzerHandler,
-      { 
-        connection: redis, 
-        concurrency: 5,
-        stalledInterval: 300000, // 5 minutes
-        drainDelay: 60,          // 60 seconds
-      },
-    );
-
-    githubAnalyzerWorker.on('completed', (job) => logger.info(`GitHub analyzer job ${job.id} completed`));
-    githubAnalyzerWorker.on('failed', (job, err) => logger.error(`GitHub analyzer job ${job?.id} failed`, err));
-  }
-  return githubAnalyzerWorker;
-}
+githubAnalyzerWorker.on('completed', (job) => logger.info(`GitHub analyzer job ${job.id} completed`));
+githubAnalyzerWorker.on('failed', (job, err) => logger.error(`GitHub analyzer job ${job?.id} failed`, err));
