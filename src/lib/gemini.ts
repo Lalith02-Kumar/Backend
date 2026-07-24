@@ -3,10 +3,9 @@ import { logger } from './logger';
 
 export let DISCOVERED_MODELS: string[] = [
   'gemini-1.5-flash',
-  'gemini-1.5-flash-latest',
-  'gemini-2.0-flash-exp',
   'gemini-1.5-pro',
-  'gemini-pro',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash-latest',
 ];
 
 interface KeyClient {
@@ -32,18 +31,20 @@ async function runModelDiagnostic(keyClient: KeyClient) {
       if (data.models && Array.isArray(data.models)) {
         const available = data.models
           .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
-          .map(m => m.name.replace(/^models\//, ''));
+          .map(m => m.name.replace(/^models\//, ''))
+          // Keep only stable production text generation models, exclude experimental/tts/image variants
+          .filter(m => !m.includes('-exp') && !m.includes('-preview') && !m.includes('-tts') && !m.includes('-image') && !m.includes('nano') && !m.includes('gemma') && !m.includes('lyria'));
 
         if (available.length > 0) {
-          DISCOVERED_MODELS = Array.from(new Set([...available, ...DISCOVERED_MODELS]));
-          logger.info({ key: keyClient.maskedKey, totalModels: available.length, models: available }, '✅ Discovered Available Gemini Models for configured API key');
+          DISCOVERED_MODELS = Array.from(new Set([...available, 'gemini-1.5-flash', 'gemini-1.5-pro']));
+          logger.info({ key: keyClient.maskedKey, totalModels: available.length, models: available }, '✅ Filtered Production Gemini Models for configured API key');
         }
       }
     } else {
       logger.warn({ status: res.status, statusText: res.statusText }, 'Could not list models via Google REST API endpoint');
     }
   } catch (err: any) {
-    logger.warn({ err: err?.message || err }, 'Gemini model discovery fetch failed, using built-in model candidates list');
+    logger.warn({ err: err?.message || err }, 'Gemini model discovery fetch failed, using built-in stable model candidates');
   }
 
   // Execute quick test generation using the top model candidate
@@ -109,7 +110,7 @@ export async function generateJson<T>(
   // We iterate through combinations of candidate models and load-balanced API keys
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const keyClient = getNextKeyClient(attempt);
-    // Cycle through discovered models on retries / 404 errors
+    // Cycle through stable discovered models
     const modelName = DISCOVERED_MODELS[attempt % DISCOVERED_MODELS.length];
     
     const model = keyClient.client.getGenerativeModel({
@@ -150,6 +151,14 @@ export async function generateJson<T>(
       const errorMessage = error?.message || String(error);
       const is404 = errorMessage.includes('404') || errorMessage.includes('not found');
 
+      if (is404) {
+        // Permanently purge failing 404 model from DISCOVERED_MODELS to prevent future attempts
+        DISCOVERED_MODELS = DISCOVERED_MODELS.filter(m => m !== modelName);
+        if (DISCOVERED_MODELS.length === 0) {
+          DISCOVERED_MODELS = ['gemini-1.5-flash', 'gemini-1.5-pro'];
+        }
+      }
+
       logger.warn({
         model: modelName,
         apiKey: keyClient.maskedKey,
@@ -158,7 +167,7 @@ export async function generateJson<T>(
         durationMs,
         is404,
         err: errorMessage,
-      }, `Gemini AI Request Failed (${is404 ? 'Model 404 Not Found' : 'API Error'}). Fallback rotating model & API key...`);
+      }, `Gemini AI Request Failed (${is404 ? 'Model 404 Not Found — Purged' : 'API Error'}). Fallback rotating model & API key...`);
 
       if (attempt < maxRetries) {
         // Backoff delay before next attempt
