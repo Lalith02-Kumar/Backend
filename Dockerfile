@@ -5,11 +5,11 @@ WORKDIR /app
 
 # Install dependencies (no secrets needed at build time)
 COPY package*.json ./
+COPY prisma ./prisma/
 RUN npm ci --prefer-offline
 
 # Copy source
 COPY tsconfig.json ./
-COPY prisma ./prisma/
 COPY src ./src/
 
 # Generate Prisma client (no secrets needed)
@@ -25,6 +25,7 @@ WORKDIR /app
 
 # Install only production dependencies
 COPY package*.json ./
+COPY prisma ./prisma/
 RUN npm ci --omit=dev --prefer-offline
 
 # Copy compiled output and prisma client
